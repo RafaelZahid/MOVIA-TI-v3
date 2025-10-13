@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Movia TI</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "leaflet": "https://esm.sh/leaflet@1.9.4",
+      "polyline": "https://esm.sh/@mapbox/polyline@1.1.1",
+      "./routes.js": "./routes.js",
+      "./ai.js": "./ai.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="splash"><img src="logo_movia_next.png" alt="Movia TI" /></div>
+  <header class="topbar">
+    <div class="brand">Movia TI</div>
+    <button id="logoutBtn" class="link-btn" aria-label="Cerrar sesión" hidden>Cerrar sesión</button>
+  </header>
+
+  <main id="authView" class="view">
+    <section class="role-select">
+      <img src="logo_movia_next.png" alt="Movia TI logo" class="logo">
+      <h1>Movia TI</h1>
+      <p class="subtitle">Cercano, confiable y conectado contigo</p>
+      <div class="carousel" id="heroCarousel">
+        <div class="slides">
+          <div class="slide">
+            <img src="map_realtime.png" alt="Mapa y movilidad" class="slide-img">
+            <div class="slide-caption">Mapa en tiempo real de rutas y unidades</div>
+          </div>
+          <div class="slide">
+            <img src="chat_ai.png" alt="Asistencia IA" class="slide-img">
+            <div class="slide-caption">Chat IA con asistencia y emergencias</div>
+          </div>
+          <div class="slide">
+            <img src="secure_register.png" alt="Registro seguro" class="slide-img">
+            <div class="slide-caption">Registro e ingreso seguros</div>
+          </div>
+          <div class="slide">
+            <img src="reduce_wait.png" alt="Reduce tiempo de espera" class="slide-img">
+            <div class="slide-caption">Reduce el tiempo de espera</div>
+          </div>
+          <div class="slide">
+            <img src="avoid_full.png" alt="Evita unidades sin espacio" class="slide-img">
+            <div class="slide-caption">Evita unidades sin espacio</div>
+          </div>
+          <div class="slide">
+            <img src="optimize_peak.png" alt="Optimiza horarios" class="slide-img">
+            <div class="slide-caption">Reduce el desabasto en horas pico</div>
+          </div>
+        </div>
+        <div class="dots">
+          <button class="dot" data-i="0" aria-label="Slide 1"></button>
+          <button class="dot" data-i="1" aria-label="Slide 2"></button>
+          <button class="dot" data-i="2" aria-label="Slide 3"></button>
+          <button class="dot" data-i="3" aria-label="Slide 4"></button>
+          <button class="dot" data-i="4" aria-label="Slide 5"></button>
+          <button class="dot" data-i="5" aria-label="Slide 6"></button>
+        </div>
+      </div>
+      <div class="role-buttons">
+        <button id="asUserBtn" class="primary"><span class="material-symbols-rounded">person</span> Usuario</button>
+        <button id="asDriverBtn" class="secondary"><span class="material-symbols-rounded">directions_bus</span> Operador</button>
+      </div>
+    </section>
+    <footer class="app-footer">
+      <div class="footer-inner">
+        <img src="logo_movia_next.png" alt="Movia TI" class="footer-logo">
+        <div class="legal">
+          © <span id="yearNow"></span> Movia TI. Todos los derechos reservados.
+          <span class="sep">•</span>
+          <a href="#" aria-label="Términos de uso">Términos</a>
+          <span class="sep">•</span>
+          <a href="#" aria-label="Política de privacidad">Privacidad</a>
+          <span class="sep">•</span>
+          <a href="#" aria-label="Contacto">Contacto</a>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <main id="roleChoiceView" class="view" hidden>
+    <section class="card" style="text-align:center;">
+      <h2 id="roleChoiceTitle"><span class="material-symbols-rounded">how_to_reg</span> Elige una opción</h2>
+      <p id="roleChoiceDesc">Continúa como <strong id="roleChosen">Usuario</strong> u <strong>Operador</strong>.</p>
+      <div class="auth-choice">
+        <button id="goRegister" class="primary"><span class="material-symbols-rounded">how_to_reg</span> Registrarte</button>
+        <button id="goLogin" class="secondary"><span class="material-symbols-rounded">login</span> Ingresar</button>
+      </div>
+      <button id="backToHome" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Volver al inicio</button>
+    </section>
+  </main>
+
+  <main id="userRegView" class="view" hidden>
+    <form id="userForm" class="card">
+      <h2><span class="material-symbols-rounded">person_add</span> Registro de Usuario</h2>
+      <label>Nombre<input type="text" id="userName" required></label>
+      <label>Correo<input type="email" id="userEmail" required></label>
+      <label>Municipio de procedencia<input type="text" id="userCity" required></label>
+      <label>No. Personas<input type="number" min="1" id="userCount" required></label>
+      <label>Ruta de preferencia
+        <select id="userRoute" required></select>
+      </label>
+      <label>Contraseña<input type="password" id="userPass" required></label>
+      <button type="submit" class="primary"><span class="material-symbols-rounded">arrow_forward</span> Continuar</button>
+      <button type="button" id="backToRoleFromUser" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Regresar</button>
+    </form>
+  </main>
+
+  <main id="driverRegView" class="view" hidden>
+    <form id="driverForm" class="card">
+      <h2><span class="material-symbols-rounded">badge</span> Registro de Operador</h2>
+      <label>Nombre<input type="text" id="driverName" required></label>
+      <label>Número de unidad<input type="text" id="driverUnit" required></label>
+      <label>No. Placa<input type="text" id="driverPlate" required></label>
+      <label>Ruta asignada
+        <select id="driverRoute" required></select>
+      </label>
+      <label>Correo<input type="email" id="driverEmail" required></label>
+      <label>Contraseña<input type="password" id="driverPass" required></label>
+      <button type="submit" class="primary"><span class="material-symbols-rounded">arrow_forward</span> Continuar</button>
+      <button type="button" id="backToRoleFromDriver" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Regresar</button>
+    </form>
+  </main>
+
+  <main id="loginView" class="view" hidden>
+    <form id="loginForm" class="card">
+      <h2><span class="material-symbols-rounded">login</span> Ingresar</h2>
+      <label>Correo<input type="email" id="loginEmail" required></label>
+      <label>Contraseña<input type="password" id="loginPass" required></label>
+      <div id="loginStatus" class="muted" style="color:#5f6b7a; font-size:14px;"></div>
+      <button type="submit" class="primary"><span class="material-symbols-rounded">arrow_forward</span> Continuar</button>
+      <button type="button" id="backToChoiceFromLogin" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Regresar</button>
+    </form>
+  </main>
+
+  <main id="loginUserView" class="view" hidden>
+    <form id="loginUserForm" class="card">
+      <h2><span class="material-symbols-rounded">login</span> Ingresar como Usuario</h2>
+      <label>Correo<input type="email" id="loginUserEmail" required></label>
+      <label>Contraseña<input type="password" id="loginUserPass" required></label>
+      <div id="loginUserStatus" class="muted" style="color:#5f6b7a; font-size:14px;"></div>
+      <button type="submit" class="primary"><span class="material-symbols-rounded">arrow_forward</span> Continuar</button>
+      <button type="button" id="backToChoiceFromLoginUser" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Regresar</button>
+    </form>
+  </main>
+
+  <main id="loginDriverView" class="view" hidden>
+    <form id="loginDriverForm" class="card">
+      <h2><span class="material-symbols-rounded">login</span> Ingresar como Operador</h2>
+      <label>Correo<input type="email" id="loginDriverEmail" required></label>
+      <label>Contraseña<input type="password" id="loginDriverPass" required></label>
+      <div id="loginDriverStatus" class="muted" style="color:#5f6b7a; font-size:14px;"></div>
+      <button type="submit" class="primary"><span class="material-symbols-rounded">arrow_forward</span> Continuar</button>
+      <button type="button" id="backToChoiceFromLoginDriver" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Regresar</button>
+    </form>
+  </main>
+
+  <main id="mapView" class="view" hidden>
+    <section class="controls">
+      <label>Estado
+        <select id="stateSelect"></select>
+      </label>
+      <label>Municipio
+        <select id="municipalitySelect"></select>
+      </label>
+      <label>Ruta
+        <select id="routeSelect"></select>
+      </label>
+      <label>Origen/Destino
+        <div class="od-pair">
+          <select id="originSelect"></select>
+          <select id="destinationSelect"></select>
+        </div>
+      </label>
+      <button id="requestBtn" class="accent"><span class="material-symbols-rounded">hail</span> Solicitar unidad</button>
+      <button id="cancelRequestBtn" class="danger"><span class="material-symbols-rounded">do_not_disturb_on</span> Dejar de solicitar</button>
+      <button id="emergencyBtn" class="warning"><span class="material-symbols-rounded">emergency</span> Emergencia</button>
+      <div class="eta" id="etaBox"><span class="material-symbols-rounded">schedule</span><span id="etaText">ETA: --</span></div>
+      <div id="routeStats" class="eta">Distancia: -- | Tiempo: --</div>
+      <div class="recommend">
+        <input id="destInput" type="text" placeholder="¿A dónde vas?">
+        <button id="recommendBtn" class="secondary"><span class="material-symbols-rounded">map</span> Sugerir ruta</button>
+      </div>
+      <div id="status" role="status" aria-live="polite"></div>
+      <div class="actions">
+        <button id="fixRouteBtn" class="secondary"><span class="material-symbols-rounded">route</span> Fijar ruta</button>
+        <button id="fixMeBtn" class="secondary"><span class="material-symbols-rounded">my_location</span> Fijar mi Ubicación</button>
+        <button id="fixNearestBtn" class="secondary"><span class="material-symbols-rounded">pin_drop</span> Fijar unidad más cercana</button>
+        <button id="historyBtn" class="secondary"><span class="material-symbols-rounded">history</span> Historial de viajes</button>
+      </div>
+    </section>
+    <div id="map"></div>
+    <button id="chatNavBtn" class="chat-fab" aria-label="Chat IA">
+      <span class="material-symbols-rounded">support_agent</span>
+      <span class="fab-label">Chat IA</span>
+    </button>
+    <button id="settingsBtn" class="settings-fab" aria-label="Configuración">
+      <span class="material-symbols-rounded">settings</span>
+      <span class="fab-label">Configuración</span>
+    </button>
+    <button id="visualizeBtn" class="settings-fab" aria-label="Visualizar unidades">
+      <span class="material-symbols-rounded">visibility</span>
+      <span class="fab-label">Visualizar</span>
+    </button>
+    <footer class="app-footer">
+      <div class="footer-inner">
+        <img src="logo_combilink.png" alt="Movia TI" class="footer-logo">
+        <div class="legal">
+          © <span id="yearNow"></span> Movia TI. Todos los derechos reservados.
+          <span class="sep">•</span>
+          <a href="#" aria-label="Términos de uso">Términos</a>
+          <span class="sep">•</span>
+          <a href="#" aria-label="Política de privacidad">Privacidad</a>
+          <span class="sep">•</span>
+          <a href="#" aria-label="Contacto">Contacto</a>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <main id="chatView" class="view" hidden>
+    <div class="chat-page">
+      <header class="chat-page-header">
+        <div class="chat-title"><span class="material-symbols-rounded">support_agent</span> Soporte IA</div>
+        <div class="chat-actions">
+          <button id="sttBtn" class="icon-btn" title="Dictar voz"><span class="material-symbols-rounded">mic</span></button>
+          <button id="ttsBtn" class="icon-btn" title="Leer en voz alta"><span class="material-symbols-rounded">volume_up</span></button>
+        </div>
+      </header>
+      <div id="chatIntro" class="chat-intro"></div>
+      <div id="chatMessages" class="chat-list" aria-live="polite"></div>
+      <div class="chat-suggestions" id="chatSuggestions">
+        <div class="chips">
+          <button class="chip">¿Qué combi me lleva al Suburbano desde Av. Jilotepec?</button>
+          <button class="chip">¿A qué hora pasa por Las Ánimas?</button>
+          <button class="chip">¿Cuánto cuesta de Dorado a Quebrada?</button>
+        </div>
+        <button id="backFromChat" class="icon-btn"><span class="material-symbols-rounded">arrow_back</span> Volver</button>
+      </div>
+      <div class="chat-page-input">
+        <input id="chatInput" type="text" placeholder="Escribe un mensaje...">
+        <button id="sendChatBtn" class="primary"><span class="material-symbols-rounded">send</span></button>
+      </div>
+      <p class="chat-disclaimer">Este chat puede cometer errores. Compruebe la información.</p>
+    </div>
+  </main>
+
+  <main id="travelHistoryView" class="view" hidden>
+    <section class="card">
+      <h2><span class="material-symbols-rounded">history</span> Historial de viajes</h2>
+      <div id="travelHistoryList" class="history-list"></div>
+      <button id="backFromHistory" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Volver</button>
+    </section>
+  </main>
+
+  <main id="operatorProfileView" class="view" hidden>
+    <form id="operatorProfileForm" class="card">
+      <h2><span class="material-symbols-rounded">badge</span> Perfil del Operador</h2>
+      <label>Nombre del Operador<input type="text" id="opProfName" required></label>
+      <label>Número de Unidad<input type="text" id="opProfUnit" required></label>
+      <label>Número de Placa de Unidad<input type="text" id="opProfPlate" required></label>
+      <label>Número de Identificación<input type="text" id="opProfId" required></label>
+      <label>Foto del Operador
+        <input type="file" id="opProfPhoto" accept="image/*" capture="environment">
+      </label>
+      <div id="opProfPreview" class="muted" style="font-size:14px;"></div>
+      <button type="submit" class="primary"><span class="material-symbols-rounded">save</span> Actualizar</button>
+      <button type="button" id="backFromProfile" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Volver</button>
+    </form>
+  </main>
+
+  <main id="operatorDocsView" class="view" hidden>
+    <form id="operatorDocsForm" class="card">
+      <h2><span class="material-symbols-rounded">folder</span> Documentos</h2>
+      <label>Tarjeta de Circulación del Vehículo<input type="file" id="docCirculacion" accept="image/*,.pdf"></label>
+      <label>Póliza de Seguros<input type="file" id="docPoliza" accept="image/*,.pdf"></label>
+      <label>Licencia de conducir (Tipo E)<input type="file" id="docLicencia" accept="image/*,.pdf"></label>
+      <label>Tarjeta de Identificación del Operador<input type="file" id="docIdentificacion" accept="image/*,.pdf"></label>
+      <label>Certificado de Salud<input type="file" id="docSalud" accept="image/*,.pdf"></label>
+      <div id="docsList" class="history-list"></div>
+      <button type="submit" class="primary"><span class="material-symbols-rounded">save</span> Actualizar</button>
+      <button type="button" id="backFromDocs" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Volver</button>
+    </form>
+  </main>
+
+  <main id="operatorMapView" class="view" hidden>
+    <section class="controls">
+      <label>Estado
+        <select id="stateSelectOp"></select>
+      </label>
+      <label>Municipio
+        <select id="municipalitySelectOp"></select>
+      </label>
+      <label>Ruta
+        <select id="routeSelectOp"></select>
+      </label>
+      <button id="requestBtnOp" class="accent" style="display:none;"><span class="material-symbols-rounded">hail</span> Solicitar unidad</button>
+      <div class="eta" id="etaBoxOp"><span class="material-symbols-rounded">schedule</span><span id="etaTextOp">ETA: --</span></div>
+      <div id="routeStatsOp" class="eta">Distancia: -- | Tiempo: --</div>
+      <div class="actions">
+        <button id="fixRouteBtnOp" class="secondary"><span class="material-symbols-rounded">route</span> Fijar ruta</button>
+        <button id="fixNearestBtnOp" class="secondary"><span class="material-symbols-rounded">pin_drop</span> Fijar usuario más cercano</button>
+        <button id="historyBtnOp" class="secondary"><span class="material-symbols-rounded">history</span> Historial de viajes</button>
+      </div>
+    </section>
+    <div id="opMap"></div>
+    <button id="chatNavBtnOp" class="chat-fab" aria-label="Chat IA (Operador)">
+      <span class="material-symbols-rounded">support_agent</span>
+      <span class="fab-label">Chat IA</span>
+    </button>
+    <button id="settingsBtnOp" class="settings-fab" aria-label="Configuración (Operador)">
+      <span class="material-symbols-rounded">settings</span>
+      <span class="fab-label">Configuración</span>
+    </button>
+    <section id="driverPanel" class="driver-panel">
+      <div class="stat">
+        <span class="label">Ruta asignada</span>
+        <span id="driverRouteName" class="value">--</span>
+      </div>
+      <div class="stat">
+        <span class="label">Estado</span>
+        <span id="driverOnlineStatus" class="value">Inactivo</span>
+      </div>
+      <div class="stat">
+        <span class="label">Solicitudes en tu ruta</span>
+        <span id="requestCount" class="value">0</span>
+      </div>
+      <div class="stat">
+        <span class="label">Asientos disponibles</span>
+        <span id="seatsAvailable" class="value">--</span>
+      </div>
+      <div class="stat">
+        <span class="label">Perfil</span>
+        <button id="openProfileBtn" class="secondary"><span class="material-symbols-rounded">person</span> Perfil</button>
+      </div>
+      <div class="stat">
+        <span class="label">Documentos</span>
+        <button id="openDocsBtn" class="secondary"><span class="material-symbols-rounded">folder</span> Documentos</button>
+      </div>
+      <button id="toggleActiveBtn" class="accent"><span class="material-symbols-rounded">power_settings_new</span> Cambiar estado</button>
+      <button id="updateSeatsBtn" class="secondary"><span class="material-symbols-rounded">event_seat</span> Actualizar número disponible de asientos</button>
+    </section>
+  </main>
+
+  <main id="userSettingsView" class="view" hidden>
+    <form id="userSettingsForm" class="card">
+      <h2><span class="material-symbols-rounded">settings</span> Configuración</h2>
+      <label><input type="checkbox" id="setUserNotify"> Notificaciones de llegada</label>
+      <label><input type="checkbox" id="setUserShare"> Compartir ubicación con operadores activos</label>
+      <label><input type="checkbox" id="setUserShowUnits"> Mostrar unidades activas en mi ruta</label>
+      <button type="submit" class="primary"><span class="material-symbols-rounded">save</span> Guardar</button>
+      <button type="button" id="userDeleteAccountBtn" class="secondary"><span class="material-symbols-rounded">logout</span> Cerrar sesión y borrar cuenta</button>
+      <button type="button" id="backFromUserSettings" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Volver</button>
+    </form>
+  </main>
+
+  <main id="driverSettingsView" class="view" hidden>
+    <form id="driverSettingsForm" class="card">
+      <h2><span class="material-symbols-rounded">settings</span> Configuración (Operador)</h2>
+      <label><input type="checkbox" id="setDriverActiveMap"> Mostrar mi unidad cuando estoy Activo</label>
+      <label><input type="checkbox" id="setDriverAutoSeats"> Ajuste automático de asientos por solicitudes</label>
+      <label><input type="checkbox" id="setDriverNotifyReq"> Notificar nuevas solicitudes en mi ruta</label>
+      <button type="submit" class="primary"><span class="material-symbols-rounded">save</span> Guardar</button>
+      <button type="button" id="driverDeleteAccountBtn" class="secondary"><span class="material-symbols-rounded">logout</span> Cerrar sesión y borrar cuenta</button>
+      <button type="button" id="backFromDriverSettings" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Volver</button>
+    </form>
+  </main>
+
+  <main id="operatorDetailView" class="view" hidden>
+    <section class="card">
+      <h2><span class="material-symbols-rounded">badge</span> Perfil de la Unidad</h2>
+      <div id="opDetailPhotoWrap" style="text-align:center;">
+        <img id="opDetailPhoto" alt="Foto del operador" style="width:140px;height:140px;border-radius:12px;object-fit:cover;border:1px solid var(--border);"/>
+      </div>
+      <div id="opDetailInfo" class="history-list"></div>
+      <button id="backFromOperatorDetail" class="text-btn"><span class="material-symbols-rounded">arrow_back</span> Volver</button>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
