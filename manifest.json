@@ -1,12 +1,82 @@
 {
-  "background_color": "#ffffff",
-  "dir": "ltr",
-  "display": "standalone",
-  "name": "MOVIA TI",
-  "orientation": "portrait",
+  "name": "Movia TI",
+  "short_name": "Movia",
+  "description": "Aplicación de transporte inteligente que reduce los tiempos de espera en paradas y conecta en tiempo real a usuarios con operadores del Estado de México.",
+  "start_url": "/index.html",
   "scope": "/",
-  "short_name": "MOVIA TI",
-  "start_url": "/https://rafaelzahid.github.io/MOVIA-TI-v3/",
-  "theme_color": "#ffffff",
-  "description": "Aplicación de transporte inteligente que reduce tiempos de espera y conecta usuarios con operadores en tiempo real"
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a1a2f",
+  "theme_color": "#00aaff",
+  "lang": "es-MX",
+  "dir": "ltr",
+
+  "icons": [
+    {
+      "src": "icons/movia-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/movia-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+
+  "shortcuts": [
+    {
+      "name": "Ver rutas disponibles",
+      "short_name": "Rutas",
+      "description": "Accede directamente a las rutas activas en tu zona.",
+      "url": "/rutas.html",
+      "icons": [{ "src": "icons/shortcut-rutas.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Ver mapa en tiempo real",
+      "short_name": "Mapa",
+      "description": "Visualiza la ubicación de usuarios y operadores en tiempo real.",
+      "url": "/mapa.html",
+      "icons": [{ "src": "icons/shortcut-mapa.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Asistencia IA",
+      "short_name": "Asistencia",
+      "description": "Accede al chat de asistencia con inteligencia artificial.",
+      "url": "/asistencia.html",
+      "icons": [{ "src": "icons/shortcut-ia.png", "sizes": "96x96" }]
+    }
+  ],
+
+  "permissions": {
+    "geolocation": {
+      "description": "Movia TI utiliza tu ubicación para mostrar unidades cercanas y calcular rutas precisas."
+    }
+  },
+
+  "categories": ["transporte", "movilidad", "servicios", "mapas"],
+
+  "screenshots": [
+    {
+      "src": "screenshots/movia_home.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "label": "Pantalla principal con mapa interactivo y opciones del usuario"
+    },
+    {
+      "src": "screenshots/movia_operador.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "label": "Interfaz del operador con opciones para rutas y documentos"
+    }
+  ],
+
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.movia.ti"
+    }
+  ],
+
+  "prefer_related_applications": false
 }
