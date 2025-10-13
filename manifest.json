@@ -1,20 +1,12 @@
 {
-  "name": "MOVIA TI",
-  "short_name": "MOVIA TI",
-  "start_url": "./index.html",
+  "background_color": "#7aadc9",
+  "dir": "ltr",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0078d7",
-  "icons": [
-    {
-      "src": "icons/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icons/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+  "name": "rafaelzahid.github",
+  "orientation": "portrait",
+  "scope": "/",
+  "short_name": "rafaelzahid.github",
+  "start_url": "/",
+  "theme_color": "#e1a234",
+  "description": "Aplicación de transporte inteligente que reduce tiempos de espera y conecta usuarios con operadores en tiempo real"
 }
