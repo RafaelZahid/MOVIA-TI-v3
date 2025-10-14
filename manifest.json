@@ -1,10 +1,13 @@
 {
   "name": "MOVIA TI",
-  "short_name": "MOVIA TI",
+  "short_name": "MOVIA",
+  "description": "Aplicación de transporte inteligente que reduce los tiempos de espera mostrando en tiempo real las unidades y usuarios.",
   "start_url": "./index.html",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#0078d7",
+  "theme_color": "#1976d2",
+  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "icons/icon-192x192.png",
