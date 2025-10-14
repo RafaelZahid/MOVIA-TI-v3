@@ -9,6 +9,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="/manifest.json">
+
   <script type="importmap">
   {
     "imports": {
@@ -389,5 +391,17 @@
   </main>
 
   <script type="module" src="app.js"></script>
+
+  <script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js')
+      .then(() => console.log('Service Worker registrado correctamente.'))
+      .catch((err) => console.log('Error al registrar el Service Worker:', err));
+  });
+}
+</script>
+
+
 </body>
 </html>
