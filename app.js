@@ -3,6 +3,10 @@ import polyline from "polyline";
 import { ROUTES } from "./routes.js";
 import { smartReply } from "./ai.js";
 
+// Hybrid tap helper and global shim
+function onTap(el, cb){ let t=0; const w=(e)=>{const n=Date.now(); if(e.type==='touchstart'){t=n; cb(e);} else if(n-t>400){ cb(e);} }; el.addEventListener('touchstart', w, { passive:true }); el.addEventListener('click', w); }
+(function(){ const orig=EventTarget.prototype.addEventListener; EventTarget.prototype.addEventListener=function(type, listener, opts){ if(type==='click' && listener && !listener.__hybrid){ let t=0; const w=function(e){const n=Date.now(); if(e.type==='touchstart'){t=n; listener.call(this,e);} else if(n-t>400){ listener.call(this,e);} }; w.__hybrid=true; orig.call(this,'touchstart', w, { passive:true }); return orig.call(this,'click', w, opts); } return orig.call(this,type,listener,opts); }; })();
+
 /* App State */
 const state = {
   role: null, // "user" | "driver"
@@ -681,7 +685,7 @@ function updateETAUI() {
       .addTo(state.map)
       .bindPopup(`Unidad ${eta.op.unit} • Placa ${eta.op.plate}<br>Ruta: ${rName}<br>Asientos: ${seats}<br>Nombre: ${name}<br>ID: ${ident}${photo}`)
       .openPopup();
-    setTimeout(()=>{ const el = document.getElementById(`opPhotoBtn_${ident}`); el && (el.onclick = ()=> openOperatorDetail(ident)); }, 80);
+    setTimeout(()=>{ const el = document.getElementById(`opPhotoBtn_${ident}`); el && (el.onclick = ()=> openOperatorDetail(ident)); }, 8);
   }
 }
 
