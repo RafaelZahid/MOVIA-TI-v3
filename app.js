@@ -2,10 +2,25 @@ import L from "leaflet";
 import polyline from "polyline";
 import { ROUTES } from "./routes.js";
 import { smartReply } from "./ai.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCjr7pih7CR3xbdl_ChJ4MCxfKF6do4f0o",
+  authDomain: "movia-ti.firebaseapp.com",
+  projectId: "movia-ti",
+  storageBucket: "movia-ti.firebasestorage.app",
+  messagingSenderId: "584183661416",
+  appId: "1:584183661416:web:8fdbe540f5ab069a984cdd"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 
 // Hybrid tap helper and global shim
 function onTap(el, cb){ let t=0; const w=(e)=>{const n=Date.now(); if(e.type==='touchstart'){t=n; cb(e);} else if(n-t>400){ cb(e);} }; el.addEventListener('touchstart', w, { passive:true }); el.addEventListener('click', w); }
-(function(){ const orig=EventTarget.prototype.addEventListener; EventTarget.prototype.addEventListener=function(type, listener, opts){ if(type==='click' && listener && !listener.__hybrid){ let t=0; const w=function(e){const n=Date.now(); if(e.type==='touchstart'){t=n; listener.call(this,e);} else if(n-t>400){ listener.call(this,e);} }; w.__hybrid=true; orig.call(this,'touchstart', w, { passive:true }); return orig.call(this,'click', w, opts); } return orig.call(this,type,listener,opts); }; })();
 
 /* App State */
 const state = {
@@ -109,6 +124,7 @@ const operatorDetailView = document.getElementById("operatorDetailView");
 const opDetailPhoto = document.getElementById("opDetailPhoto");
 const opDetailInfo = document.getElementById("opDetailInfo");
 const backFromOperatorDetail = document.getElementById("backFromOperatorDetail");
+const enableLocationBtn = document.getElementById("enableLocationBtn");
 
 /* chat elements (moved into chatView) */
 const chatMessages = document.getElementById("chatMessages");
@@ -158,7 +174,10 @@ document.getElementById("backToRoleFromDriver").addEventListener("click", ()=>{
 });
 
 /* Registration handlers */
-userForm.addEventListener("submit", e => {
+import { collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+/* Registration handler para usuarios */
+userForm.addEventListener("submit", async e => {
   e.preventDefault();
   const data = {
     role: "user",
@@ -169,17 +188,30 @@ userForm.addEventListener("submit", e => {
     preferredRouteId: userRouteSel.value,
     pass: document.getElementById("userPass").value
   };
-  const users = db.read(DB_KEYS.users);
-  if (users.some(u=>u.email===data.email)) { alert("Ese correo ya está registrado."); return; }
-  users.push({ ...data }); db.write(DB_KEYS.users, users);
-  state.session = { ...data }; localStorage.setItem("session", JSON.stringify(state.session));
-  userRegView.hidden = true; enterMapView();
+
+  // 🔹 Verificar si ya existe el correo
+  const q = query(collection(db, "usuarios"), where("email", "==", data.email));
+  const snapshot = await getDocs(q);
+  if (!snapshot.empty) {
+    alert("Ese correo ya está registrado.");
+    return;
+  }
+
+  // 🔹 Agregar nuevo usuario a Firestore
+  await addDoc(collection(db, "usuarios"), data);
+
+  // 🔹 Guardar sesión localmente
+  state.session = { ...data };
+  localStorage.setItem("session", JSON.stringify(state.session));
+  userRegView.hidden = true;
+  enterMapView();
 });
 
-driverForm.addEventListener("submit", e => {
+
+/* Registration handler para conductores */
+driverForm.addEventListener("submit", async e => {
   e.preventDefault();
-  const drivers = db.read(DB_KEYS.drivers);
-  const ident = "OP-" + String(drivers.length + 1).padStart(4, "0");
+
   const data = {
     role: "driver",
     name: document.getElementById("driverName").value.trim(),
@@ -188,50 +220,67 @@ driverForm.addEventListener("submit", e => {
     routeId: driverRouteSel.value,
     email: document.getElementById("driverEmail").value.trim(),
     pass: document.getElementById("driverPass").value,
-    id: ident,
-    ident
+    id: "OP-" + Date.now()
   };
-  if (drivers.some(d=>d.email===data.email)) { alert("Ese correo ya está en uso."); return; }
-  if (drivers.some(d=>d.unit===data.unit)) { alert("Ese número de unidad ya está registrado."); return; }
-  drivers.push({ ...data }); db.write(DB_KEYS.drivers, drivers);
-  state.session = data; localStorage.setItem("session", JSON.stringify(data));
-  driverRegView.hidden = true;
-  const ops = JSON.parse(localStorage.getItem("operators") || "{}");
-  ops[data.routeId] = ops[data.routeId] || [];
-  if (!ops[data.routeId].some(o => o.id === data.id)) {
-    ops[data.routeId].push({ id: data.id, name: data.name, unit: data.unit, plate: data.plate, lat: null, lng: null });
+
+  // Verifica correo duplicado
+  const q = query(collection(db, "conductores"), where("email", "==", data.email));
+  const snapshot = await getDocs(q);
+  if (!snapshot.empty) {
+    alert("Ese correo ya está registrado.");
+    return;
   }
-  localStorage.setItem("operators", JSON.stringify(ops));
+
+  // 🔹 Guardar en Firestore
+  await addDoc(collection(db, "conductores"), data);
+
+  // 🔹 Guardar sesión en el navegador
+  state.session = data;
+  localStorage.setItem("session", JSON.stringify(data));
+  driverRegView.hidden = true;
   enterMapView();
 });
 
+
 /* Login handler */
-loginForm.addEventListener("submit", e=>{
+/* Login handler */
+loginForm.addEventListener("submit", async e => {
   e.preventDefault();
+
   const email = document.getElementById("loginEmail").value.trim();
   const pass = document.getElementById("loginPass").value;
-  const users = db.read(DB_KEYS.users);
-  const drivers = db.read(DB_KEYS.drivers);
-  let sess = users.find(u=>u.email===email && u.pass===pass) || drivers.find(d=>d.email===email && d.pass===pass);
-  if (!sess) { loginStatus.textContent = "La contraseña o correo son incorrectos."; return; }
-  loginStatus.textContent = "";
-  state.session = sess; state.role = sess.role; localStorage.setItem("session", JSON.stringify(sess));
-  loginView.hidden = true; enterMapView();
-});
-backToChoiceFromLogin.addEventListener("click", ()=>{ loginView.hidden=true; roleChoiceView.hidden=false; });
 
-/* Restore session if exists */
-// Hard reset de registros (usuarios, operadores y sesión) solicitado
-// localStorage.removeItem("db_users");
-// localStorage.removeItem("db_drivers");
-// localStorage.removeItem("session");
-// localStorage.removeItem("operators");
-const saved = localStorage.getItem("session");
-if (saved) {
-  state.session = JSON.parse(saved);
-  state.role = state.session.role;
-  enterMapView(true);
-}
+  let user = null;
+
+  // Buscar en usuarios
+  const q1 = query(collection(db, "usuarios"), where("email", "==", email), where("pass", "==", pass));
+  const snap1 = await getDocs(q1);
+  if (!snap1.empty) {
+    user = snap1.docs[0].data();
+  }
+
+  // Si no está en usuarios, buscar en conductores
+  if (!user) {
+    const q2 = query(collection(db, "conductores"), where("email", "==", email), where("pass", "==", pass));
+    const snap2 = await getDocs(q2);
+    if (!snap2.empty) {
+      user = snap2.docs[0].data();
+    }
+  }
+
+  if (!user) {
+    loginStatus.textContent = "La contraseña o correo son incorrectos.";
+    return;
+  }
+
+  // Guardar sesión
+  state.session = user;
+  state.role = user.role;
+  localStorage.setItem("session", JSON.stringify(user));
+  loginView.hidden = true;
+  enterMapView();
+});
+
 
 /* Map init */
 /* =======================
@@ -298,6 +347,7 @@ async function enterMapView(isRestore=false) {
       state.map.setView(ll, 15);
     }, ()=>{ /* silent */ }, { enableHighAccuracy:true, timeout:8000 });
   }
+  ensureGeoPermissionPrompt();
   watchPosition();
 }
 
@@ -340,10 +390,27 @@ function watchPosition() {
         updateETAUI();
       }
     },
-    err => { statusEl.textContent = "No se pudo obtener ubicación."; console.warn(err); },
+    err => { statusEl.textContent = "No se pudo obtener ubicación."; enableLocationBtn.style.display="inline-flex"; console.warn(err); },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
   );
 }
+
+function ensureGeoPermissionPrompt(){
+  if (!enableLocationBtn) return;
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: "geolocation" }).then(res => {
+      enableLocationBtn.style.display = (res.state === "granted") ? "none" : "inline-flex";
+    }).catch(()=> { enableLocationBtn.style.display="inline-flex"; });
+  } else {
+    enableLocationBtn.style.display = "inline-flex";
+  }
+}
+onTap(enableLocationBtn, () => {
+  navigator.geolocation.getCurrentPosition(
+    () => { enableLocationBtn.style.display="none"; watchPosition(); },
+    () => { statusEl.textContent = "Activa permisos de ubicación en el dispositivo."; }
+  );
+});
 
 /* Routing helpers */
 async function geocodePlace(q) {
@@ -475,6 +542,9 @@ function findNearestOperator(routeId, userLatLng) {
 
 /* Request button */
 requestBtn.addEventListener("click", async () => {
+  // replace click with hybrid onTap
+});
+onTap(requestBtn, async () => {
   if (!state.session) { statusEl.textContent = "Debes iniciar sesión para solicitar una unidad."; return; }
   const rid = state.selectedRouteId;
   if (!rid) { statusEl.textContent = "Selecciona una ruta primero."; return; }
@@ -718,6 +788,9 @@ function distanceToRouteFromWaypoints(route, point){
 }
 
 recommendBtn.addEventListener("click", async () => {
+  // replace click with hybrid onTap
+});
+onTap(recommendBtn, async () => {
   const destLabel = destinationSelect.value.trim();
   if (!destLabel) { statusEl.textContent = "Selecciona destino."; return; }
   let userPos=null;
@@ -802,7 +875,8 @@ function handleEmergency(){
 function saveChat(){ localStorage.setItem("chat_messages", chatMessages.innerHTML); }
 function restoreChat(){ const html = localStorage.getItem("chat_messages"); if(html) chatMessages.innerHTML = html; }
 
-sendChatBtn.addEventListener("click", sendChat);
+sendChatBtn.addEventListener("click", sendChat); // replace click with hybrid onTap
+onTap(sendChatBtn, sendChat);
 sttBtn.addEventListener("click", startSTT);
 ttsBtn.addEventListener("click", ()=> speakText(chatMessages.lastElementChild?.textContent||""));
 emergencyBtn.addEventListener("click", handleEmergency);
@@ -816,7 +890,7 @@ function startSTT(){
 
 /* DB Keys */
 const DB_KEYS = { users:"db_users", drivers:"db_drivers" };
-const db = {
+const localdb = {
   read: (k)=> JSON.parse(localStorage.getItem(k)||"[]"),
   write: (k,v)=> localStorage.setItem(k, JSON.stringify(v))
 };
@@ -825,9 +899,14 @@ const db = {
 function initCarousel(){
   const slides = document.querySelector("#heroCarousel .slides");
   const dots = Array.from(document.querySelectorAll("#heroCarousel .dot"));
-  let i=0, n=dots.length; const go=(nIdx)=>{ i=nIdx; slides.style.transform=`translateX(-${i*100}%)`; dots.forEach((d,j)=>d.classList.toggle("active", j===i)); };
-  dots.forEach(d=>d.addEventListener("click",()=>go(Number(d.dataset.i))));
-  setInterval(()=>go((i+1)%n), 4000); go(0);
+  let i=0, n=dots.length, last=performance.now(), delay=4000;
+  const go=(nIdx)=>{ i=nIdx; slides.style.transform=`translateX(-${i*100}%)`; dots.forEach((d,j)=>d.classList.toggle("active", j===i)); };
+  dots.forEach(d=>onTap(d, ()=>go(Number(d.dataset.i))));
+  function loop(ts){
+    if (ts - last >= delay) { go((i+1)%n); last = ts; }
+    requestAnimationFrame(loop);
+  }
+  go(0); requestAnimationFrame(loop);
 }
 window.addEventListener("DOMContentLoaded", ()=>{
   initCarousel();
