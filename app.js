@@ -440,66 +440,504 @@ async function enterMapView(isRestore=false) {
   watchPosition();
 }
 
-/* Geolocation */
+// ============================================
+// GEOLOCALIZACIÓN MEJORADA PARA ANDROID
+// Reemplaza tu código actual desde "/* Geolocation */" 
+// hasta el final de "onTap(enableLocationBtn..."
+// ============================================
+
+/* Geolocation mejorada */
 let watchId = null;
-function watchPosition() {
+let locationRetries = 0;
+const MAX_RETRIES = 3;
+
+/**
+ * Detectar si está en Android
+ */
+function isAndroid() {
+  return /Android/i.test(navigator.userAgent);
+}
+
+/**
+ * Mostrar diálogo personalizado para solicitar ubicación
+ */
+function showLocationRequestDialog() {
+  // Verificar si ya existe el diálogo
+  if (document.getElementById('locationDialog')) {
+    return Promise.resolve(false);
+  }
+
+  return new Promise((resolve) => {
+    const dialog = document.createElement('div');
+    dialog.id = 'locationDialog';
+    dialog.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      padding: 20px;
+      animation: fadeIn 0.3s ease-in-out;
+    `;
+
+    dialog.innerHTML = `
+      <style>
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      </style>
+      <div style="
+        background: white;
+        border-radius: 20px;
+        padding: 30px 24px;
+        max-width: 380px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        animation: slideUp 0.3s ease-out;
+      ">
+        <div style="
+          width: 80px;
+          height: 80px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-radius: 50%;
+          margin: 0 auto 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 40px;
+        ">
+          📍
+        </div>
+        
+        <h2 style="
+          margin: 0 0 12px 0;
+          font-size: 22px;
+          color: #1a1a1a;
+          font-weight: 700;
+        ">
+          Activar Ubicación
+        </h2>
+        
+        <p style="
+          margin: 0 0 24px 0;
+          color: #666;
+          font-size: 15px;
+          line-height: 1.6;
+        ">
+          Movia TI necesita tu ubicación para ofrecerte el mejor servicio
+        </p>
+        
+        <div style="
+          background: #f5f7fa;
+          border-radius: 12px;
+          padding: 16px;
+          margin-bottom: 24px;
+          text-align: left;
+        ">
+          <div style="display: flex; align-items: start; margin-bottom: 12px;">
+            <span style="font-size: 20px; margin-right: 12px;">🗺️</span>
+            <div style="flex: 1;">
+              <div style="font-size: 14px; font-weight: 600; color: #333; margin-bottom: 4px;">
+                Ver tu posición en el mapa
+              </div>
+              <div style="font-size: 12px; color: #666;">
+                Te mostramos exactamente dónde estás
+              </div>
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: start; margin-bottom: 12px;">
+            <span style="font-size: 20px; margin-right: 12px;">🚌</span>
+            <div style="flex: 1;">
+              <div style="font-size: 14px; font-weight: 600; color: #333; margin-bottom: 4px;">
+                Encontrar unidades cercanas
+              </div>
+              <div style="font-size: 12px; color: #666;">
+                Te conectamos con el transporte más próximo
+              </div>
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: start;">
+            <span style="font-size: 20px; margin-right: 12px;">⏱️</span>
+            <div style="flex: 1;">
+              <div style="font-size: 14px; font-weight: 600; color: #333; margin-bottom: 4px;">
+                Tiempo de llegada preciso
+              </div>
+              <div style="font-size: 12px; color: #666;">
+                Cálculo exacto del ETA a tu ubicación
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <button id="acceptLocationBtn" style="
+          width: 100%;
+          padding: 16px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          border-radius: 12px;
+          font-size: 16px;
+          font-weight: 700;
+          cursor: pointer;
+          margin-bottom: 10px;
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        ">
+          ✓ Activar Ahora
+        </button>
+        
+        <button id="denyLocationBtn" style="
+          width: 100%;
+          padding: 14px;
+          background: transparent;
+          color: #999;
+          border: 2px solid #e0e0e0;
+          border-radius: 12px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+        ">
+          Ahora no
+        </button>
+        
+        <p style="
+          margin: 16px 0 0 0;
+          font-size: 11px;
+          color: #999;
+          line-height: 1.4;
+        ">
+          🔒 Tu ubicación es privada y segura. Solo se usa mientras usas la app.
+        </p>
+      </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    const acceptBtn = document.getElementById('acceptLocationBtn');
+    const denyBtn = document.getElementById('denyLocationBtn');
+
+    acceptBtn.onclick = () => {
+      dialog.remove();
+      resolve(true);
+    };
+
+    denyBtn.onclick = () => {
+      dialog.remove();
+      resolve(false);
+    };
+  });
+}
+
+/**
+ * Mostrar mensaje cuando los permisos son denegados
+ */
+function showPermissionDeniedMessage() {
+  const message = document.createElement('div');
+  message.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    background: #ff5252;
+    color: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 99999;
+    animation: slideDown 0.3s ease-out;
+  `;
+  
+  message.innerHTML = `
+    <style>
+      @keyframes slideDown {
+        from { transform: translateY(-100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+    </style>
+    <div style="display: flex; align-items: center;">
+      <span style="font-size: 24px; margin-right: 12px;">⚠️</span>
+      <div style="flex: 1;">
+        <div style="font-weight: 700; margin-bottom: 4px;">Permisos de ubicación denegados</div>
+        <div style="font-size: 13px; opacity: 0.9;">
+          Para usar Movia TI, activa la ubicación en:
+          <br>Ajustes → Apps → Movia TI → Permisos
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(message);
+  
+  setTimeout(() => {
+    message.style.transition = 'all 0.3s ease-out';
+    message.style.opacity = '0';
+    message.style.transform = 'translateY(-20px)';
+    setTimeout(() => message.remove(), 300);
+  }, 5000);
+}
+
+/**
+ * Solicitar permisos de geolocalización
+ */
+async function requestLocationPermission() {
+  // Verificar si ya tenemos permisos
+  if (navigator.permissions && navigator.permissions.query) {
+    try {
+      const result = await navigator.permissions.query({ name: 'geolocation' });
+      if (result.state === 'granted') {
+        return true;
+      }
+    } catch (error) {
+      console.log('Permissions API no disponible');
+    }
+  }
+
+  // Mostrar diálogo personalizado en Android
+  if (isAndroid()) {
+    const userAccepted = await showLocationRequestDialog();
+    if (!userAccepted) {
+      return false;
+    }
+  }
+
+  // Intentar obtener ubicación (esto activará el diálogo del sistema)
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        console.log('✅ Permisos de ubicación concedidos');
+        resolve(true);
+      },
+      (error) => {
+        console.error('❌ Error obteniendo permisos:', error);
+        if (error.code === 1) { // PERMISSION_DENIED
+          showPermissionDeniedMessage();
+        }
+        resolve(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      }
+    );
+  });
+}
+
+/**
+ * Función principal de watchPosition
+ */
+async function watchPosition() {
+  console.log('🔄 Iniciando watchPosition...');
+  
   if (!navigator.geolocation) {
-    statusEl.textContent = "Geolocalización no disponible.";
+    if (statusEl) statusEl.textContent = "Geolocalización no disponible en este dispositivo.";
     return;
   }
-  if (watchId) navigator.geolocation.clearWatch(watchId);
+
+  // Limpiar watch anterior si existe
+  if (watchId) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+
+  // Solicitar permisos primero
+  const hasPermission = await requestLocationPermission();
+  
+  if (!hasPermission) {
+    if (statusEl) statusEl.textContent = "Permisos de ubicación requeridos.";
+    if (enableLocationBtn) enableLocationBtn.style.display = "inline-flex";
+    return;
+  }
+
+  console.log('✅ Permisos concedidos, iniciando seguimiento...');
+
+  // Mostrar indicador de carga
+  if (statusEl) {
+    statusEl.textContent = "📍 Obteniendo tu ubicación...";
+  }
+
+  // Configurar watchPosition
   watchId = navigator.geolocation.watchPosition(
-    pos => {
+    async (pos) => {
+      locationRetries = 0; // Reset retries on success
       const { latitude: lat, longitude: lng } = pos.coords;
+      
+      console.log(`📍 Ubicación actualizada: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      
+      // Limpiar mensaje de error
+      if (statusEl && statusEl.textContent.includes("ubicación")) {
+        statusEl.textContent = "";
+      }
+      
+      // Ocultar botón de activar ubicación
+      if (enableLocationBtn) {
+        enableLocationBtn.style.display = "none";
+      }
+
       if (state.role === "user") {
+        // ===== USUARIO =====
         if (!state.userMarker) {
-          state.userMarker = L.marker([lat, lng], { icon: personIcon }).addTo(state.map).bindPopup("Tu ubicación");
-        } else state.userMarker.setLatLng([lat, lng]);
-        localStorage.setItem("last_user_pos", JSON.stringify({ lat, lng, at: Date.now() })); // compartir ubicación a operadores
-        updateETAUI();
-      } else {
-        // mostrar/ocultar marcador según estado activo
-        const ops = JSON.parse(localStorage.getItem("operators") || "{}");
-        const r = state.session.routeId;
-        const meIdx = ops[r]?.findIndex(o => o.id === state.session.id);
-        const isActive = meIdx >= 0 ? (ops[r][meIdx].active ?? false) : false;
-        if (isActive) {
-          if (!state.driverMarker) {
-            state.driverMarker = L.marker([lat, lng], { icon: combiIcon }).addTo(state.map).bindPopup("Tu unidad");
-          } else state.driverMarker.setLatLng([lat, lng]);
+          state.userMarker = L.marker([lat, lng], { icon: personIcon })
+            .addTo(state.map)
+            .bindPopup("📍 Tu ubicación actual");
+          
+          // Centrar mapa en la ubicación del usuario
+          state.map.setView([lat, lng], Math.max(state.map.getZoom(), 14));
         } else {
-          if (state.driverMarker) { state.map.removeLayer(state.driverMarker); state.driverMarker = null; }
+          state.userMarker.setLatLng([lat, lng]);
         }
-        // persist operator location
-        if (meIdx >= 0) {
-          ops[r][meIdx].lat = lat; ops[r][meIdx].lng = lng;
-          localStorage.setItem("operators", JSON.stringify(ops));
+
+        // 🔥 Actualizar ubicación en Firebase
+        if (state.sessionDocId) {
+          try {
+            await updateDoc(doc(db, "usuarios", state.sessionDocId), {
+              lat: lat,
+              lng: lng,
+              lastUpdate: serverTimestamp()
+            });
+          } catch (error) {
+            console.error("Error actualizando ubicación en Firebase:", error);
+          }
         }
+
+        updateETAUI();
+        
+      } else {
+        // ===== OPERADOR =====
+        if (state.sessionDocId) {
+          try {
+            // Actualizar en Firebase
+            await updateDoc(doc(db, "conductores", state.sessionDocId), {
+              lat: lat,
+              lng: lng,
+              lastUpdate: serverTimestamp()
+            });
+            
+            // Verificar si está activo
+            const docSnap = await getDoc(doc(db, "conductores", state.sessionDocId));
+            const isActive = docSnap.data()?.disponible || false;
+            
+            if (isActive) {
+              // Mostrar marcador si está activo
+              if (!state.driverMarker) {
+                state.driverMarker = L.marker([lat, lng], { icon: combiIcon })
+                  .addTo(state.map)
+                  .bindPopup("🚌 Tu unidad");
+                
+                // Centrar mapa en la ubicación del operador
+                state.map.setView([lat, lng], Math.max(state.map.getZoom(), 14));
+              } else {
+                state.driverMarker.setLatLng([lat, lng]);
+              }
+            } else {
+              // Ocultar marcador si está inactivo
+              if (state.driverMarker) {
+                state.map.removeLayer(state.driverMarker);
+                state.driverMarker = null;
+              }
+            }
+            
+          } catch (error) {
+            console.error("Error actualizando ubicación de operador:", error);
+          }
+        }
+
         updateRequestCount();
         updateETAUI();
       }
     },
-    err => { statusEl.textContent = "No se pudo obtener ubicación."; enableLocationBtn.style.display="inline-flex"; console.warn(err); },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    
+    (error) => {
+      console.error('❌ Error en watchPosition:', error);
+      
+      locationRetries++;
+      
+      let errorMessage = "No se pudo obtener tu ubicación. ";
+      
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          errorMessage += "Permisos denegados.";
+          showPermissionDeniedMessage();
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage += "Ubicación no disponible.";
+          break;
+        case error.TIMEOUT:
+          errorMessage += "Tiempo de espera agotado.";
+          break;
+        default:
+          errorMessage += "Error desconocido.";
+      }
+      
+      if (statusEl) {
+        statusEl.textContent = errorMessage;
+      }
+      
+      if (enableLocationBtn) {
+        enableLocationBtn.style.display = "inline-flex";
+      }
+      
+      // Reintentar si no se han superado los máximos intentos
+      if (locationRetries < MAX_RETRIES) {
+        console.log(`🔄 Reintentando (${locationRetries}/${MAX_RETRIES})...`);
+        setTimeout(() => {
+          watchPosition();
+        }, 3000);
+      }
+    },
+    
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    }
   );
+
+  console.log('👁️ WatchPosition iniciado con ID:', watchId);
 }
 
-function ensureGeoPermissionPrompt(){
+/**
+ * Verificar y mostrar botón de permisos si es necesario
+ */
+function ensureGeoPermissionPrompt() {
   if (!enableLocationBtn) return;
+  
   if (navigator.permissions && navigator.permissions.query) {
-    navigator.permissions.query({ name: "geolocation" }).then(res => {
-      enableLocationBtn.style.display = (res.state === "granted") ? "none" : "inline-flex";
-    }).catch(()=> { enableLocationBtn.style.display="inline-flex"; });
+    navigator.permissions.query({ name: "geolocation" })
+      .then(res => {
+        enableLocationBtn.style.display = (res.state === "granted") ? "none" : "inline-flex";
+      })
+      .catch(() => {
+        enableLocationBtn.style.display = "inline-flex";
+      });
   } else {
     enableLocationBtn.style.display = "inline-flex";
   }
 }
-onTap(enableLocationBtn, () => {
-  navigator.geolocation.getCurrentPosition(
-    () => { enableLocationBtn.style.display="none"; watchPosition(); },
-    () => { statusEl.textContent = "Activa permisos de ubicación en el dispositivo."; }
-  );
-});
+
+/**
+ * Botón de activar ubicación
+ */
+if (enableLocationBtn) {
+  onTap(enableLocationBtn, async () => {
+    console.log('🖱️ Botón de activar ubicación presionado');
+    await watchPosition();
+  });
+}
+
+console.log('✅ Módulo de geolocalización mejorado cargado');
 
 /* Routing helpers */
 async function geocodePlace(q) {
