@@ -3,8 +3,21 @@ import polyline from "polyline";
 import { ROUTES } from "./routes.js";
 import { smartReply } from "./ai.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  getDocs, 
+  getDoc,
+  doc,
+  query, 
+  where,
+  updateDoc,
+  setDoc,
+  serverTimestamp,
+  onSnapshot,
+  deleteDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCjr7pih7CR3xbdl_ChJ4MCxfKF6do4f0o",
@@ -18,24 +31,32 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// 🔥 NUEVAS COLECCIONES FIREBASE
+// usuarios -> colección de usuarios registrados
+// conductores -> colección de operadores/conductores
+// solicitudes -> solicitudes activas de usuarios
+// ubicaciones_operadores -> ubicaciones en tiempo real de operadores
+// historial_viajes -> historial de viajes de usuarios
 
 // Hybrid tap helper and global shim
 function onTap(el, cb){ let t=0; const w=(e)=>{const n=Date.now(); if(e.type==='touchstart'){t=n; cb(e);} else if(n-t>400){ cb(e);} }; el.addEventListener('touchstart', w, { passive:true }); el.addEventListener('click', w); }
 
 /* App State */
 const state = {
-  role: null, // "user" | "driver"
-  session: null, // user or driver data
+  role: null,
+  session: null,
+  sessionDocId: null, // 🔥 ID del documento en Firebase
   map: null,
   routeLayers: new Map(),
   selectedRouteId: null,
   userMarker: null,
   driverMarker: null,
-  operators: {}, // { routeId: [ { id, name, unit, plate, lat, lng } ] }
-  requests: {}, // { routeId: number }
+  operators: {},
+  requests: {},
   requestLayers: new Map(),
   activeOpMarkers: new Map(),
-  requestPollTimer: null
+  requestPollTimer: null,
+  unsubscribers: [] // 🔥 Para limpiar listeners de Firebase
 };
 
 /* Elements */
@@ -77,7 +98,8 @@ const loginUserForm = document.getElementById("loginUserForm");
 const loginDriverForm = document.getElementById("loginDriverForm");
 const backToChoiceFromLogin = document.getElementById("backToChoiceFromLogin");
 const authChoice = document.getElementById("authChoice");
-const sttBtn = document.getElementById("sttBtn"); const ttsBtn = document.getElementById("ttsBtn");
+const sttBtn = document.getElementById("sttBtn"); 
+const ttsBtn = document.getElementById("ttsBtn");
 const roleChoiceView = document.getElementById("roleChoiceView");
 const roleChosen = document.getElementById("roleChosen");
 const backToHome = document.getElementById("backToHome");
@@ -125,8 +147,6 @@ const opDetailPhoto = document.getElementById("opDetailPhoto");
 const opDetailInfo = document.getElementById("opDetailInfo");
 const backFromOperatorDetail = document.getElementById("backFromOperatorDetail");
 const enableLocationBtn = document.getElementById("enableLocationBtn");
-
-/* chat elements (moved into chatView) */
 const chatMessages = document.getElementById("chatMessages");
 const chatInput = document.getElementById("chatInput");
 const sendChatBtn = document.getElementById("sendChatBtn");
@@ -134,10 +154,11 @@ const sendChatBtn = document.getElementById("sendChatBtn");
 /* Populate route selects */
 function fillRouteSelects() {
   const opts = ROUTES.map(r => `<option value="${r.id}">${r.name}</option>`).join("");
-  userRouteSel.innerHTML = opts; driverRouteSel.innerHTML = opts;
+  userRouteSel.innerHTML = opts; 
+  driverRouteSel.innerHTML = opts;
   routeSelect.innerHTML = `<option value="">Sin asignar</option>` + opts;
   const origins = [...new Set(ROUTES.map(r=>r.originLabel||r.name.split(" - ")[0]))];
-  const dests =   [...new Set(ROUTES.map(r=>r.destinationLabel||r.name.split(" - ").slice(-1)[0]))];
+  const dests = [...new Set(ROUTES.map(r=>r.destinationLabel||r.name.split(" - ").slice(-1)[0]))];
   originSelect.innerHTML = `<option value="">Origen</option>` + origins.map(o=>`<option>${o}</option>`).join("");
   destinationSelect.innerHTML = `<option value="">Destino</option>` + dests.map(d=>`<option>${d}</option>`).join("");
 }
@@ -145,20 +166,33 @@ fillRouteSelects();
 
 /* Role selection */
 asUserBtn.addEventListener("click", () => {
-  state.role = "user"; authView.hidden = true; roleChoiceView.hidden = false; roleChosen.textContent = "Usuario";
+  state.role = "user"; 
+  authView.hidden = true; 
+  roleChoiceView.hidden = false; 
+  roleChosen.textContent = "Usuario";
   roleChoiceView.querySelector("#roleChoiceTitle").innerHTML = `<span class="material-symbols-rounded">how_to_reg</span> Elige una opción - Usuario`;
   roleChoiceView.querySelector("#roleChoiceDesc").textContent = "Elige la opción para registrarte o Ingresar.";
 });
+
 asDriverBtn.addEventListener("click", () => {
-  state.role = "driver"; authView.hidden = true; roleChoiceView.hidden = false; roleChosen.textContent = "Operador";
+  state.role = "driver"; 
+  authView.hidden = true; 
+  roleChoiceView.hidden = false; 
+  roleChosen.textContent = "Operador";
   roleChoiceView.querySelector("#roleChoiceTitle").innerHTML = `<span class="material-symbols-rounded">how_to_reg</span> Elige una opción - Operador`;
   roleChoiceView.querySelector("#roleChoiceDesc").textContent = "Elige la opción para registrarte o Ingresar.";
 });
-backToHome.addEventListener("click", ()=>{ roleChoiceView.hidden=true; authView.hidden=false; });
+
+backToHome.addEventListener("click", ()=>{ 
+  roleChoiceView.hidden=true; 
+  authView.hidden=false; 
+});
 
 document.querySelector("#roleChoiceView #goRegister").addEventListener("click",()=>{
-  roleChoiceView.hidden=true; (state.role==="user"?userRegView:driverRegView).hidden=false;
+  roleChoiceView.hidden=true; 
+  (state.role==="user"?userRegView:driverRegView).hidden=false;
 });
+
 document.querySelector("#roleChoiceView #goLogin").addEventListener("click",()=>{
   roleChoiceView.hidden = true;
   loginUserView.hidden = state.role !== "user";
@@ -167,18 +201,19 @@ document.querySelector("#roleChoiceView #goLogin").addEventListener("click",()=>
 });
 
 document.getElementById("backToRoleFromUser").addEventListener("click", ()=>{
-  userRegView.hidden = true; roleChoiceView.hidden = false;
+  userRegView.hidden = true; 
+  roleChoiceView.hidden = false;
 });
+
 document.getElementById("backToRoleFromDriver").addEventListener("click", ()=>{
-  driverRegView.hidden = true; roleChoiceView.hidden = false;
+  driverRegView.hidden = true; 
+  roleChoiceView.hidden = false;
 });
 
-/* Registration handlers */
-import { collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-/* Registration handler para usuarios */
+/* 🔥 REGISTRO DE USUARIOS - YA INTEGRADO CON FIREBASE */
 userForm.addEventListener("submit", async e => {
   e.preventDefault();
+  
   const data = {
     role: "user",
     name: document.getElementById("userName").value.trim(),
@@ -186,29 +221,38 @@ userForm.addEventListener("submit", async e => {
     city: document.getElementById("userCity").value.trim(),
     count: Number(document.getElementById("userCount").value),
     preferredRouteId: userRouteSel.value,
-    pass: document.getElementById("userPass").value
+    pass: document.getElementById("userPass").value,
+    createdAt: serverTimestamp(),
+    active: true
   };
 
-  // 🔹 Verificar si ya existe el correo
-  const q = query(collection(db, "usuarios"), where("email", "==", data.email));
-  const snapshot = await getDocs(q);
-  if (!snapshot.empty) {
-    alert("Ese correo ya está registrado.");
-    return;
+  try {
+    // Verificar si ya existe el correo
+    const q = query(collection(db, "usuarios"), where("email", "==", data.email));
+    const snapshot = await getDocs(q);
+    
+    if (!snapshot.empty) {
+      alert("Ese correo ya está registrado.");
+      return;
+    }
+
+    // 🔥 Agregar nuevo usuario a Firestore
+    const docRef = await addDoc(collection(db, "usuarios"), data);
+    
+    // Guardar sesión localmente con el ID del documento
+    state.session = { ...data, id: docRef.id };
+    state.sessionDocId = docRef.id;
+    localStorage.setItem("session", JSON.stringify(state.session));
+    
+    userRegView.hidden = true;
+    enterMapView();
+  } catch (error) {
+    console.error("Error al registrar usuario:", error);
+    alert("Error al registrar. Intenta de nuevo.");
   }
-
-  // 🔹 Agregar nuevo usuario a Firestore
-  await addDoc(collection(db, "usuarios"), data);
-
-  // 🔹 Guardar sesión localmente
-  state.session = { ...data };
-  localStorage.setItem("session", JSON.stringify(state.session));
-  userRegView.hidden = true;
-  enterMapView();
 });
 
-
-/* Registration handler para conductores */
+/* 🔥 REGISTRO DE CONDUCTORES - YA INTEGRADO CON FIREBASE */
 driverForm.addEventListener("submit", async e => {
   e.preventDefault();
 
@@ -220,67 +264,112 @@ driverForm.addEventListener("submit", async e => {
     routeId: driverRouteSel.value,
     email: document.getElementById("driverEmail").value.trim(),
     pass: document.getElementById("driverPass").value,
-    id: "OP-" + Date.now()
+    id: "OP-" + Date.now(),
+    createdAt: serverTimestamp(),
+    active: false,
+    disponible: false,
+    seats: 15
   };
 
-  // Verifica correo duplicado
-  const q = query(collection(db, "conductores"), where("email", "==", data.email));
-  const snapshot = await getDocs(q);
-  if (!snapshot.empty) {
-    alert("Ese correo ya está registrado.");
-    return;
+  try {
+    // Verificar correo duplicado
+    const q = query(collection(db, "conductores"), where("email", "==", data.email));
+    const snapshot = await getDocs(q);
+    
+    if (!snapshot.empty) {
+      alert("Ese correo ya está registrado.");
+      return;
+    }
+
+    // 🔥 Guardar en Firestore
+    const docRef = await addDoc(collection(db, "conductores"), data);
+    
+    // Guardar sesión en el navegador con ID del documento
+    state.session = { ...data, docId: docRef.id };
+    state.sessionDocId = docRef.id;
+    localStorage.setItem("session", JSON.stringify(state.session));
+    
+    driverRegView.hidden = true;
+    enterMapView();
+  } catch (error) {
+    console.error("Error al registrar conductor:", error);
+    alert("Error al registrar. Intenta de nuevo.");
   }
-
-  // 🔹 Guardar en Firestore
-  await addDoc(collection(db, "conductores"), data);
-
-  // 🔹 Guardar sesión en el navegador
-  state.session = data;
-  localStorage.setItem("session", JSON.stringify(data));
-  driverRegView.hidden = true;
-  enterMapView();
 });
 
-
-/* Login handler */
-/* Login handler */
-loginForm.addEventListener("submit", async e => {
+/* 🔥 LOGIN USUARIOS */
+loginUserForm.addEventListener("submit", async e => {
   e.preventDefault();
 
-  const email = document.getElementById("loginEmail").value.trim();
-  const pass = document.getElementById("loginPass").value;
+  const email = document.getElementById("loginUserEmail").value.trim();
+  const pass = document.getElementById("loginUserPass").value;
 
-  let user = null;
-
-  // Buscar en usuarios
-  const q1 = query(collection(db, "usuarios"), where("email", "==", email), where("pass", "==", pass));
-  const snap1 = await getDocs(q1);
-  if (!snap1.empty) {
-    user = snap1.docs[0].data();
-  }
-
-  // Si no está en usuarios, buscar en conductores
-  if (!user) {
-    const q2 = query(collection(db, "conductores"), where("email", "==", email), where("pass", "==", pass));
-    const snap2 = await getDocs(q2);
-    if (!snap2.empty) {
-      user = snap2.docs[0].data();
+  try {
+    const q = query(collection(db, "usuarios"), where("email", "==", email), where("pass", "==", pass));
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      document.getElementById("loginUserStatus").textContent = "Credenciales incorrectas.";
+      return;
     }
-  }
 
-  if (!user) {
-    loginStatus.textContent = "La contraseña o correo son incorrectos.";
-    return;
+    const userDoc = snapshot.docs[0];
+    const userData = userDoc.data();
+    
+    state.session = { ...userData, id: userDoc.id };
+    state.sessionDocId = userDoc.id;
+    state.role = "user";
+    localStorage.setItem("session", JSON.stringify(state.session));
+    
+    loginUserView.hidden = true;
+    enterMapView();
+  } catch (error) {
+    console.error("Error al iniciar sesión:", error);
+    document.getElementById("loginUserStatus").textContent = "Error al iniciar sesión.";
   }
-
-  // Guardar sesión
-  state.session = user;
-  state.role = user.role;
-  localStorage.setItem("session", JSON.stringify(user));
-  loginView.hidden = true;
-  enterMapView();
 });
 
+document.getElementById("backToChoiceFromLoginUser").addEventListener("click", ()=>{ 
+  loginUserView.hidden=true; 
+  roleChoiceView.hidden=false; 
+});
+
+/* 🔥 LOGIN CONDUCTORES */
+loginDriverForm.addEventListener("submit", async e => {
+  e.preventDefault();
+
+  const email = document.getElementById("loginDriverEmail").value.trim();
+  const pass = document.getElementById("loginDriverPass").value;
+
+  try {
+    const q = query(collection(db, "conductores"), where("email", "==", email), where("pass", "==", pass));
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      document.getElementById("loginDriverStatus").textContent = "Credenciales incorrectas.";
+      return;
+    }
+
+    const driverDoc = snapshot.docs[0];
+    const driverData = driverDoc.data();
+    
+    state.session = { ...driverData, docId: driverDoc.id };
+    state.sessionDocId = driverDoc.id;
+    state.role = "driver";
+    localStorage.setItem("session", JSON.stringify(state.session));
+    
+    loginDriverView.hidden = true;
+    enterMapView();
+  } catch (error) {
+    console.error("Error al iniciar sesión:", error);
+    document.getElementById("loginDriverStatus").textContent = "Error al iniciar sesión.";
+  }
+});
+
+document.getElementById("backToChoiceFromLoginDriver").addEventListener("click", ()=>{ 
+  loginDriverView.hidden=true; 
+  roleChoiceView.hidden=false; 
+});
 
 /* Map init */
 /* =======================
