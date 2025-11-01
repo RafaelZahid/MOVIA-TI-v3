@@ -19,6 +19,20 @@ import {
   deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
+// ============================================
+// DIAGNÓSTICO: Agregar al inicio del archivo
+// ============================================
+
+console.log('═══════════════════════════════════════');
+console.log('🔍 DIAGNÓSTICO DE GEOLOCALIZACIÓN');
+console.log('═══════════════════════════════════════');
+console.log('User Agent:', navigator.userAgent);
+console.log('Plataforma:', navigator.platform);
+console.log('Geolocation API:', navigator.geolocation ? '✅ Disponible' : '❌ No disponible');
+console.log('Permissions API:', navigator.permissions ? '✅ Disponible' : '❌ No disponible');
+console.log('HTTPS:', location.protocol === 'https:' ? '✅' : '❌');
+console.log('═══════════════════════════════════════');
+
 const firebaseConfig = {
   apiKey: "AIzaSyCjr7pih7CR3xbdl_ChJ4MCxfKF6do4f0o",
   authDomain: "movia-ti.firebaseapp.com",
@@ -45,7 +59,7 @@ function onTap(el, cb){ let t=0; const w=(e)=>{const n=Date.now(); if(e.type==='
 const state = {
   role: null,
   session: null,
-  sessionDocId: null, // 🔥 ID del documento en Firebase
+  sessionDocId: null, //  ID del documento en Firebase
   map: null,
   routeLayers: new Map(),
   selectedRouteId: null,
@@ -595,7 +609,7 @@ function showLocationRequestDialog() {
           margin-bottom: 10px;
           box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         ">
-          ✓ Activar Ahora
+           Activar Ahora
         </button>
         
         <button id="denyLocationBtn" style="
@@ -618,7 +632,7 @@ function showLocationRequestDialog() {
           color: #999;
           line-height: 1.4;
         ">
-          🔒 Tu ubicación es privada y segura. Solo se usa mientras usas la app.
+           Tu ubicación es privada y segura. Solo se usa mientras usas la app.
         </p>
       </div>
     `;
@@ -688,19 +702,33 @@ function showPermissionDeniedMessage() {
   }, 5000);
 }
 
+
+
+
+// ============================================
+// SOLUCIÓN MEJORADA - FORZAR PERMISOS EN ANDROID
+// Reemplaza SOLO la función requestLocationPermission() 
+// en tu código actual
+// ============================================
+
 /**
- * Solicitar permisos de geolocalización
+ * Solicitar permisos de geolocalización (VERSIÓN FORZADA PARA ANDROID)
  */
 async function requestLocationPermission() {
+  console.log('🔄 Solicitando permisos de ubicación...');
+  
   // Verificar si ya tenemos permisos
   if (navigator.permissions && navigator.permissions.query) {
     try {
       const result = await navigator.permissions.query({ name: 'geolocation' });
+      console.log('📋 Estado de permisos:', result.state);
+      
       if (result.state === 'granted') {
+        console.log('✅ Permisos ya concedidos');
         return true;
       }
     } catch (error) {
-      console.log('Permissions API no disponible');
+      console.log('⚠️ Permissions API no disponible:', error);
     }
   }
 
@@ -708,75 +736,154 @@ async function requestLocationPermission() {
   if (isAndroid()) {
     const userAccepted = await showLocationRequestDialog();
     if (!userAccepted) {
+      console.log('❌ Usuario rechazó el diálogo personalizado');
       return false;
     }
   }
 
-  // Intentar obtener ubicación (esto activará el diálogo del sistema)
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      () => {
-        console.log('✅ Permisos de ubicación concedidos');
-        resolve(true);
-      },
-      (error) => {
-        console.error('❌ Error obteniendo permisos:', error);
-        if (error.code === 1) { // PERMISSION_DENIED
-          showPermissionDeniedMessage();
-        }
-        resolve(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
-      }
-    );
-  });
-}
+  console.log('🎯 Intentando activar permisos del sistema...');
 
-/**
- * Función principal de watchPosition
- */
-async function watchPosition() {
-  console.log('🔄 Iniciando watchPosition...');
-  
-  if (!navigator.geolocation) {
-    if (statusEl) statusEl.textContent = "Geolocalización no disponible en este dispositivo.";
-    return;
+  // MÉTODO 1: Intentar múltiples veces con getCurrentPosition
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    console.log(`🔄 Intento ${attempt}/3 de getCurrentPosition`);
+    
+    try {
+      const position = await new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error('Timeout'));
+        }, 15000);
+
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            clearTimeout(timeoutId);
+            console.log('✅ getCurrentPosition exitoso:', pos.coords);
+            resolve(pos);
+          },
+          (error) => {
+            clearTimeout(timeoutId);
+            console.error(`❌ getCurrentPosition error (intento ${attempt}):`, error);
+            
+            // Si es error de permisos, mostrar mensaje
+            if (error.code === 1) { // PERMISSION_DENIED
+              showPermissionDeniedMessage();
+            }
+            
+            reject(error);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+          }
+        );
+      });
+
+      console.log('✅ Permisos concedidos exitosamente');
+      return true;
+
+    } catch (error) {
+      console.error(`❌ Intento ${attempt} falló:`, error);
+      
+      // Si no es el último intento, esperar antes de reintentar
+      if (attempt < 3) {
+        console.log('⏳ Esperando 2 segundos antes de reintentar...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
   }
 
-  // Limpiar watch anterior si existe
+  console.error('❌ Todos los intentos fallaron');
+  return false;
+}
+
+// ============================================
+// FUNCIÓN ADICIONAL: Verificar estado GPS
+// ============================================
+
+/**
+ * Verificar si el GPS está habilitado (solo informativo)
+ */
+function checkGPSEnabled() {
+  if (!navigator.geolocation) {
+    console.error('❌ Geolocalización no soportada');
+    return false;
+  }
+  
+  console.log('✅ API de Geolocalización disponible');
+  return true;
+}
+
+// ============================================
+// FUNCIÓN MEJORADA: watchPosition con debugging
+// ============================================
+
+/**
+ * Función principal de watchPosition (VERSIÓN CON DEBUGGING EXTENSIVO)
+ */
+async function watchPosition() {
+  console.log('═══════════════════════════════════════');
+  console.log('🚀 INICIANDO WATCHPOSITION');
+  console.log('═══════════════════════════════════════');
+  
+  // Verificar geolocalización disponible
+  if (!navigator.geolocation) {
+    console.error('❌ navigator.geolocation NO DISPONIBLE');
+    if (statusEl) statusEl.textContent = "❌ Geolocalización no disponible en este dispositivo.";
+    return;
+  }
+  
+  console.log('✅ navigator.geolocation DISPONIBLE');
+  
+  // Verificar estado de la sesión
+  console.log('📱 Estado de sesión:');
+  console.log('   - Rol:', state.role);
+  console.log('   - Usuario:', state.session?.name);
+  console.log('   - Doc ID:', state.sessionDocId);
+  
+  // Limpiar watch anterior
   if (watchId) {
+    console.log('🧹 Limpiando watchId anterior:', watchId);
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
   }
 
-  // Solicitar permisos primero
+  // Solicitar permisos
+  console.log('🔐 Solicitando permisos...');
   const hasPermission = await requestLocationPermission();
   
   if (!hasPermission) {
-    if (statusEl) statusEl.textContent = "Permisos de ubicación requeridos.";
+    console.error('❌ PERMISOS DENEGADOS O ERROR');
+    if (statusEl) statusEl.textContent = "❌ Permisos de ubicación requeridos.";
     if (enableLocationBtn) enableLocationBtn.style.display = "inline-flex";
     return;
   }
 
-  console.log('✅ Permisos concedidos, iniciando seguimiento...');
+  console.log('✅ PERMISOS CONCEDIDOS - Iniciando seguimiento');
 
-  // Mostrar indicador de carga
+  // Mostrar indicador
   if (statusEl) {
     statusEl.textContent = "📍 Obteniendo tu ubicación...";
   }
 
-  // Configurar watchPosition
+  // Configurar watchPosition con logging extensivo
+  console.log('⚙️ Configurando watchPosition...');
+  
   watchId = navigator.geolocation.watchPosition(
     async (pos) => {
-      locationRetries = 0; // Reset retries on success
-      const { latitude: lat, longitude: lng } = pos.coords;
+      console.log('═══════════════════════════════════════');
+      console.log('📍 NUEVA UBICACIÓN RECIBIDA');
+      console.log('═══════════════════════════════════════');
       
-      console.log(`📍 Ubicación actualizada: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      locationRetries = 0;
+      const { latitude: lat, longitude: lng, accuracy } = pos.coords;
       
-      // Limpiar mensaje de error
+      console.log('📊 Coordenadas:');
+      console.log('   - Latitud:', lat.toFixed(6));
+      console.log('   - Longitud:', lng.toFixed(6));
+      console.log('   - Precisión:', accuracy.toFixed(2), 'metros');
+      console.log('   - Timestamp:', new Date(pos.timestamp).toLocaleTimeString());
+      
+      // Limpiar mensajes de error
       if (statusEl && statusEl.textContent.includes("ubicación")) {
         statusEl.textContent = "";
       }
@@ -787,36 +894,47 @@ async function watchPosition() {
       }
 
       if (state.role === "user") {
-        // ===== USUARIO =====
+        console.log('👤 Actualizando USUARIO');
+        
+        // Actualizar/crear marcador en el mapa
         if (!state.userMarker) {
+          console.log('📌 Creando nuevo marcador de usuario');
           state.userMarker = L.marker([lat, lng], { icon: personIcon })
             .addTo(state.map)
             .bindPopup("📍 Tu ubicación actual");
           
-          // Centrar mapa en la ubicación del usuario
-          state.map.setView([lat, lng], Math.max(state.map.getZoom(), 14));
+          // Centrar mapa
+          state.map.setView([lat, lng], 15);
+          console.log('🗺️ Mapa centrado en ubicación del usuario');
         } else {
+          console.log('📌 Actualizando marcador existente');
           state.userMarker.setLatLng([lat, lng]);
         }
 
-        // 🔥 Actualizar ubicación en Firebase
+        // Actualizar en Firebase
         if (state.sessionDocId) {
+          console.log('🔥 Actualizando ubicación en Firebase...');
           try {
             await updateDoc(doc(db, "usuarios", state.sessionDocId), {
               lat: lat,
               lng: lng,
               lastUpdate: serverTimestamp()
             });
+            console.log('✅ Ubicación actualizada en Firebase');
           } catch (error) {
-            console.error("Error actualizando ubicación en Firebase:", error);
+            console.error('❌ Error actualizando Firebase:', error);
           }
+        } else {
+          console.warn('⚠️ No hay sessionDocId - no se puede actualizar Firebase');
         }
 
         updateETAUI();
         
       } else {
-        // ===== OPERADOR =====
+        console.log('🚌 Actualizando OPERADOR');
+        
         if (state.sessionDocId) {
+          console.log('🔥 Actualizando ubicación en Firebase...');
           try {
             // Actualizar en Firebase
             await updateDoc(doc(db, "conductores", state.sessionDocId), {
@@ -824,25 +942,31 @@ async function watchPosition() {
               lng: lng,
               lastUpdate: serverTimestamp()
             });
+            console.log('✅ Ubicación actualizada en Firebase');
             
             // Verificar si está activo
             const docSnap = await getDoc(doc(db, "conductores", state.sessionDocId));
             const isActive = docSnap.data()?.disponible || false;
             
+            console.log('📊 Estado del operador:');
+            console.log('   - Disponible:', isActive);
+            
             if (isActive) {
-              // Mostrar marcador si está activo
+              // Mostrar marcador
               if (!state.driverMarker) {
+                console.log('📌 Creando nuevo marcador de operador');
                 state.driverMarker = L.marker([lat, lng], { icon: combiIcon })
                   .addTo(state.map)
                   .bindPopup("🚌 Tu unidad");
                 
-                // Centrar mapa en la ubicación del operador
-                state.map.setView([lat, lng], Math.max(state.map.getZoom(), 14));
+                state.map.setView([lat, lng], 15);
+                console.log('🗺️ Mapa centrado en ubicación del operador');
               } else {
+                console.log('📌 Actualizando marcador existente');
                 state.driverMarker.setLatLng([lat, lng]);
               }
             } else {
-              // Ocultar marcador si está inactivo
+              console.log('⚠️ Operador INACTIVO - ocultando marcador');
               if (state.driverMarker) {
                 state.map.removeLayer(state.driverMarker);
                 state.driverMarker = null;
@@ -850,34 +974,46 @@ async function watchPosition() {
             }
             
           } catch (error) {
-            console.error("Error actualizando ubicación de operador:", error);
+            console.error('❌ Error actualizando operador:', error);
           }
+        } else {
+          console.warn('⚠️ No hay sessionDocId - no se puede actualizar Firebase');
         }
 
         updateRequestCount();
         updateETAUI();
       }
+      
+      console.log('═══════════════════════════════════════');
     },
     
     (error) => {
-      console.error('❌ Error en watchPosition:', error);
+      console.error('═══════════════════════════════════════');
+      console.error('❌ ERROR EN WATCHPOSITION');
+      console.error('═══════════════════════════════════════');
+      console.error('Código de error:', error.code);
+      console.error('Mensaje:', error.message);
       
       locationRetries++;
       
       let errorMessage = "No se pudo obtener tu ubicación. ";
       
       switch (error.code) {
-        case error.PERMISSION_DENIED:
+        case 1: // PERMISSION_DENIED
+          console.error('🚫 PERMISOS DENEGADOS');
           errorMessage += "Permisos denegados.";
           showPermissionDeniedMessage();
           break;
-        case error.POSITION_UNAVAILABLE:
-          errorMessage += "Ubicación no disponible.";
+        case 2: // POSITION_UNAVAILABLE
+          console.error('📡 UBICACIÓN NO DISPONIBLE');
+          errorMessage += "Ubicación no disponible. Verifica que el GPS esté activado.";
           break;
-        case error.TIMEOUT:
+        case 3: // TIMEOUT
+          console.error('⏱️ TIMEOUT');
           errorMessage += "Tiempo de espera agotado.";
           break;
         default:
+          console.error('❓ ERROR DESCONOCIDO');
           errorMessage += "Error desconocido.";
       }
       
@@ -889,24 +1025,48 @@ async function watchPosition() {
         enableLocationBtn.style.display = "inline-flex";
       }
       
-      // Reintentar si no se han superado los máximos intentos
+      // Reintentar
       if (locationRetries < MAX_RETRIES) {
-        console.log(`🔄 Reintentando (${locationRetries}/${MAX_RETRIES})...`);
+        console.log(`🔄 Reintentando en 3 segundos (${locationRetries}/${MAX_RETRIES})...`);
         setTimeout(() => {
           watchPosition();
         }, 3000);
+      } else {
+        console.error('❌ MÁXIMO DE REINTENTOS ALCANZADO');
       }
+      
+      console.error('═══════════════════════════════════════');
     },
     
     {
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 15000, // Aumentado a 15 segundos
       maximumAge: 0
     }
   );
 
-  console.log('👁️ WatchPosition iniciado con ID:', watchId);
+  console.log('✅ WatchPosition configurado con ID:', watchId);
+  console.log('═══════════════════════════════════════');
 }
+
+// ============================================
+// INICIALIZACIÓN AUTOMÁTICA AL ENTRAR AL MAPA
+// ============================================
+
+/**
+ * Agregar esto en tu función enterMapView() DESPUÉS de initMap()
+ */
+function autoStartGeolocation() {
+  console.log('🎬 Auto-iniciando geolocalización...');
+  
+  // Esperar un poco para que el mapa se cargue
+  setTimeout(async () => {
+    console.log('⏰ Timeout completado, iniciando watchPosition');
+    await watchPosition();
+  }, 1000);
+}
+
+
 
 /**
  * Verificar y mostrar botón de permisos si es necesario
