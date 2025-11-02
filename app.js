@@ -280,7 +280,7 @@ driverForm.addEventListener("submit", async e => {
     pass: document.getElementById("driverPass").value,
     id: "OP-" + Date.now(),
     createdAt: serverTimestamp(),
-    active: false,
+    
     disponible: false,
     seats: 15
   };
@@ -1687,17 +1687,51 @@ const updateSeatsBtn = document.getElementById("updateSeatsBtn");
 const driverOnlineStatus = document.getElementById("driverOnlineStatus");
 const toggleActiveBtn = document.getElementById("toggleActiveBtn");
 
-function updateOperatorSeatsDisplay(){
-  const ops = JSON.parse(localStorage.getItem("operators") || "{}");
-  const r = state.session?.routeId; const me = ops[r]?.find(o=>o.id===state.session?.id);
-  seatsAvailable.textContent = me?.seats ?? "--";
-  updateOperatorStatusDisplay();
+// ============================================
+// REEMPLAZAR updateOperatorSeatsDisplay y updateOperatorStatusDisplay
+// ============================================
+
+async function updateOperatorSeatsDisplay(){
+  if (!state.sessionDocId) {
+    seatsAvailable.textContent = "--";
+    return;
+  }
+  
+  try {
+    const docSnap = await getDoc(doc(db, "conductores", state.sessionDocId));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      seatsAvailable.textContent = data.seats ?? 15;
+    } else {
+      seatsAvailable.textContent = "--";
+    }
+  } catch (error) {
+    console.error("Error obteniendo asientos:", error);
+    seatsAvailable.textContent = "--";
+  }
+  
+  await updateOperatorStatusDisplay();
 }
 
-function updateOperatorStatusDisplay(){
-  const ops = JSON.parse(localStorage.getItem("operators") || "{}");
-  const r = state.session?.routeId; const me = ops[r]?.find(o=>o.id===state.session?.id);
-  driverOnlineStatus.textContent = me?.active ? "Activo" : "Inactivo";
+async function updateOperatorStatusDisplay(){
+  if (!state.sessionDocId) {
+    driverOnlineStatus.textContent = "Inactivo";
+    return;
+  }
+  
+  try {
+    const docSnap = await getDoc(doc(db, "conductores", state.sessionDocId));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      // SOLO usar el campo 'disponible' de Firebase
+      driverOnlineStatus.textContent = data.disponible ? "Activo" : "Inactivo";
+    } else {
+      driverOnlineStatus.textContent = "Inactivo";
+    }
+  } catch (error) {
+    console.error("Error obteniendo estado:", error);
+    driverOnlineStatus.textContent = "Error";
+  }
 }
 
 // CAMBIO 4: Reemplazar todo el bloque if (driverPanel)
