@@ -417,6 +417,7 @@ const destIcon = L.divIcon({ className:"", html:'<div style="font-size:22px;line
 let originMarker = null, destMarker = null, userPathLayer = null;
 let lastUserMarker = null, userPosPoll = null;
 let odMarkers = [], waypointMarkers = [];
+let operatorVisibilityListeners = [];
 
 /* Enter map view */
 async function enterMapView(isRestore=false) {
@@ -1181,21 +1182,78 @@ async function drawSelectedRoute(routeId, fit=false) {
 }
 
 /* Route selection change */
+// CAMBIO 2: Reemplazar routeSelect.addEventListener
 routeSelect.addEventListener("change", async e => {
   const rid = e.target.value;
+  
   state.selectedRouteId = rid || null;
   clearRouteVisuals();
-  statusEl.textContent = rid ? "Ruta seleccionada: " + ROUTES.find(r=>r.id===rid)?.name : "";
-  if (rid) await drawSelectedRoute(rid, true);
-  if (rid && state.role === "driver") renderRequestMarkers(rid);
+  clearOperatorMarkers(); // Nueva función
+  
+  if (!rid) {
+    statusEl.textContent = "Selecciona una ruta para ver unidades disponibles.";
+    state.operators = {};
+    return;
+  }
+  
+  const routeName = ROUTES.find(r => r.id === rid)?.name || rid;
+  statusEl.textContent = `Buscando unidades en ${routeName}...`;
+  
+  if (rid) {
+    await drawSelectedRoute(rid, true);
+  }
+  
+  // ESTO ES LO NUEVO: Escuchar operadores de esta ruta
+  listenToActiveOperators(); // Nueva función
+  
   updateETAUI();
 });
+
+// CAMBIO 3: Reemplazar routeSelectOp.addEventListener
 routeSelectOp?.addEventListener("change", async e => {
-  const rid = e.target.value; state.selectedRouteId = rid || null;
-  driverRouteName.textContent = rid ? (ROUTES.find(r=>r.id===rid)?.name || "--") : "--";
+  const rid = e.target.value;
+  
+  state.selectedRouteId = rid || null;
+  
+  const driverRouteName = document.getElementById("driverRouteName");
+  if (driverRouteName) {
+    driverRouteName.textContent = rid ? (ROUTES.find(r => r.id === rid)?.name || "--") : "--";
+  }
+  
   clearRouteVisuals();
-  statusEl.textContent = rid ? "Ruta seleccionada: " + ROUTES.find(r=>r.id===rid)?.name : "";
-  if (rid) await drawSelectedRoute(rid, true); if (rid) renderRequestMarkers(rid); updateETAUI();
+  
+  if (!rid) {
+    statusEl.textContent = "Selecciona una ruta para operar.";
+    return;
+  }
+  
+  const routeName = ROUTES.find(r => r.id === rid)?.name || rid;
+  statusEl.textContent = `Ruta seleccionada: ${routeName}`;
+  
+  // ESTO ES LO NUEVO: Guardar la ruta en Firebase
+  if (state.sessionDocId) {
+    try {
+      await updateDoc(doc(db, "conductores", state.sessionDocId), {
+        routeId: rid,
+        lastUpdate: serverTimestamp()
+      });
+      
+      // Actualizar sesión local
+      if (state.session) {
+        state.session.routeId = rid;
+        localStorage.setItem("session", JSON.stringify(state.session));
+      }
+      
+    } catch (error) {
+      console.error('Error actualizando ruta:', error);
+    }
+  }
+  
+  if (rid) {
+    await drawSelectedRoute(rid, true);
+  }
+  
+  updateETAUI();
 });
 
 /* Requests handling */
@@ -1642,27 +1700,128 @@ function updateOperatorStatusDisplay(){
   driverOnlineStatus.textContent = me?.active ? "Activo" : "Inactivo";
 }
 
+// CAMBIO 4: Reemplazar todo el bloque if (driverPanel)
 if (driverPanel) {
-  updateSeatsBtn?.addEventListener("click", ()=>{
+  // Botón de actualizar asientos
+  updateSeatsBtn?.addEventListener("click", async ()=>{
     const val = prompt("Ingresa asientos disponibles (número):", seatsAvailable.textContent || "0");
-    const num = Math.max(0, Number(val||0));
-    const ops = JSON.parse(localStorage.getItem("operators") || "{}");
-    const r = state.session.routeId; const idx = ops[r]?.findIndex(o=>o.id===state.session.id);
-    if (idx>=0){ ops[r][idx].seats = num; localStorage.setItem("operators", JSON.stringify(ops)); }
-    updateOperatorSeatsDisplay(); updateETAUI();
-  });
-  toggleActiveBtn?.addEventListener("click", ()=>{
-    const ops = JSON.parse(localStorage.getItem("operators") || "{}");
-    const r = state.session.routeId; const idx = ops[r]?.findIndex(o=>o.id===state.session.id);
-    if (idx>=0){ ops[r][idx].active = !(ops[r][idx].active ?? false); localStorage.setItem("operators", JSON.stringify(ops)); }
-    updateOperatorStatusDisplay();
-    // actualizar visibilidad del marcador según estado
-    const me = ops[r]?.[idx];
-    if (me && (me.active === false) && state.driverMarker) { state.map.removeLayer(state.driverMarker); state.driverMarker = null; }
-    if (me && me.active === true && !state.driverMarker && me.lat!=null && me.lng!=null) {
-      state.driverMarker = L.marker([me.lat, me.lng], { icon: combiIcon }).addTo(state.map).bindPopup("Tu unidad");
+    const num = Math.max(0, Math.min(15, Number(val||0)));
+    
+    try {
+      await updateDoc(doc(db, "conductores", state.sessionDocId), {
+        seats: num,
+        lastUpdate: serverTimestamp()
+      });
+      
+      seatsAvailable.textContent = num;
+      alert("Asientos actualizados correctamente.");
+      updateETAUI();
+    } catch (error) {
+      console.error("Error actualizando asientos:", error);
+      alert("Error al actualizar asientos.");
     }
-    updateETAUI();
+  });
+  
+  // Botón de cambiar estado (ACTIVO/INACTIVO)
+  toggleActiveBtn?.addEventListener("click", async () => {
+    if (!state.sessionDocId) {
+      alert('Error: No se puede cambiar estado sin sesión activa.');
+      return;
+    }
+    
+    try {
+      // Obtener datos actuales del operador desde Firebase
+      const docSnap = await getDoc(doc(db, "conductores", state.sessionDocId));
+      
+      if (!docSnap.exists()) {
+        alert('Error: No se encontró tu perfil de operador.');
+        return;
+      }
+      
+      const operatorData = docSnap.data();
+      const currentStatus = operatorData.disponible || false;
+      const routeId = operatorData.routeId;
+      
+      // VALIDACIÓN 1: Debe tener ruta asignada para activarse
+      if (!currentStatus && !routeId) {
+        alert(
+          '⚠️ Selecciona una Ruta Primero\n\n' +
+          'Para activarte como operador, primero debes:\n\n' +
+          '1. Seleccionar tu ruta en el menú desplegable\n' +
+          '2. Luego podrás cambiar tu estado a Activo\n\n' +
+          'Esto permite que los usuarios te vean en la ruta correcta.'
+        );
+        
+        if (routeSelectOp) {
+          routeSelectOp.style.border = '3px solid #ff5722';
+          routeSelectOp.focus();
+          setTimeout(() => { routeSelectOp.style.border = ''; }, 3000);
+        }
+        return;
+      }
+      
+      // VALIDACIÓN 2: Debe tener ubicación para activarse
+      if (!currentStatus && (!operatorData.lat || !operatorData.lng)) {
+        alert(
+          '⚠️ Ubicación Requerida\n\n' +
+          'No se ha detectado tu ubicación.\n\n' +
+          'Asegúrate de:\n' +
+          '• Tener GPS activado\n' +
+          '• Haber dado permisos de ubicación\n' +
+          '• Esperar unos segundos\n\n' +
+          'Intenta de nuevo en unos momentos.'
+        );
+        return;
+      }
+      
+      // Cambiar el estado
+      const newStatus = !currentStatus;
+      
+      // Actualizar en Firebase
+      await updateDoc(doc(db, "conductores", state.sessionDocId), {
+        disponible: newStatus,
+        lastUpdate: serverTimestamp()
+      });
+      
+      // Actualizar UI
+      driverOnlineStatus.textContent = newStatus ? "Activo" : "Inactivo";
+      
+      // Actualizar marcador en el mapa
+      if (newStatus) {
+        // ACTIVADO
+        if (operatorData.lat && operatorData.lng) {
+          if (!state.driverMarker) {
+            state.driverMarker = L.marker([operatorData.lat, operatorData.lng], { icon: combiIcon })
+              .addTo(state.map)
+              .bindPopup("🚌 Tu unidad (ACTIVA)");
+          }
+        }
+        
+        const routeName = ROUTES.find(r => r.id === routeId)?.name || routeId;
+        alert(
+          `✅ Operador Activado\n\n` +
+          `Estás ACTIVO en:\n${routeName}\n\n` +
+          `Los usuarios de esta ruta ahora pueden verte.`
+        );
+      } else {
+        // DESACTIVADO
+        if (state.driverMarker) {
+          state.map.removeLayer(state.driverMarker);
+          state.driverMarker = null;
+        }
+        
+        alert(
+          `⚪ Operador Desactivado\n\n` +
+          `Ya NO eres visible para los usuarios.`
+        );
+      }
+      
+      updateETAUI();
+      
+    } catch (error) {
+      console.error('Error al cambiar estado:', error);
+      alert('Error al cambiar estado. Intenta de nuevo.');
+    }
   });
 }
 
@@ -2043,4 +2202,113 @@ function openOperatorDetail(opId){
 backFromOperatorDetail.addEventListener("click", ()=>{
   operatorDetailView.hidden = true;
   (state.role==="driver"?operatorMapView:mapView).hidden = false;
+
+
+  // ============================================
+// CAMBIO 5: AGREGAR ESTAS 3 FUNCIONES AL FINAL
+// ============================================
+
+// Función 1: Escuchar operadores activos de la ruta seleccionada
+function listenToActiveOperators() {
+  if (state.role !== "user") return;
+  
+  console.log('👁️ Escuchando operadores activos...');
+  
+  // Limpiar listeners anteriores
+  operatorVisibilityListeners.forEach(unsub => unsub());
+  operatorVisibilityListeners = [];
+  
+  if (!state.selectedRouteId) {
+    console.log('⚠️ No hay ruta seleccionada');
+    state.operators = {};
+    clearOperatorMarkers();
+    return;
+  }
+  
+  console.log('📍 Ruta:', state.selectedRouteId);
+  
+  // Escuchar en Firebase: conductores de esta ruta que estén disponibles
+  const q = query(
+    collection(db, "conductores"),
+    where("routeId", "==", state.selectedRouteId),
+    where("disponible", "==", true)
+  );
+  
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    console.log('🔄 Operadores encontrados:', snapshot.size);
+    
+    state.operators[state.selectedRouteId] = [];
+    
+    snapshot.docs.forEach(doc => {
+      const op = doc.data();
+      
+      if (!op.lat || !op.lng) return;
+      
+      state.operators[state.selectedRouteId].push({
+        id: op.id,
+        name: op.name,
+        unit: op.unit,
+        plate: op.plate,
+        lat: op.lat,
+        lng: op.lng,
+        seats: op.seats || 15,
+        active: op.disponible
+      });
+    });
+    
+    updateOperatorMarkersOnMap();
+    updateETAUI();
+  });
+  
+  operatorVisibilityListeners.push(unsubscribe);
+  state.unsubscribers.push(unsubscribe);
+}
+
+// Función 2: Actualizar marcadores de operadores en el mapa
+function updateOperatorMarkersOnMap() {
+  console.log('🗺️ Actualizando marcadores...');
+  
+  clearOperatorMarkers();
+  
+  const routeId = state.selectedRouteId;
+  if (!routeId) return;
+  
+  const operators = state.operators[routeId] || [];
+  
+  if (operators.length === 0) {
+    if (statusEl) statusEl.textContent = "No hay unidades activas en esta ruta.";
+    return;
+  }
+  
+  const markers = operators.map((op) => {
+    return L.marker([op.lat, op.lng], { icon: combiIcon })
+      .addTo(state.map)
+      .bindPopup(`
+        <div style="text-align: center;">
+          <strong>🚌 Unidad ${op.unit}</strong><br>
+          <small>Placa: ${op.plate}</small><br>
+          <small>Asientos: ${op.seats}</small>
+        </div>
+      `);
+  });
+  
+  state.activeOpMarkers.set(routeId, markers);
+  
+  if (statusEl) {
+    statusEl.textContent = `${operators.length} unidad(es) activa(s) en esta ruta.`;
+  }
+}
+
+// Función 3: Limpiar marcadores de operadores del mapa
+function clearOperatorMarkers() {
+  state.activeOpMarkers.forEach((markers) => {
+    markers.forEach(marker => {
+      if (state.map) state.map.removeLayer(marker);
+    });
+  });
+  
+  state.activeOpMarkers.clear();
+}
+
+
 });
