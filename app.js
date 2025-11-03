@@ -1139,6 +1139,15 @@ async function watchPosition() {
   
   watchId = navigator.geolocation.watchPosition(
     async (pos) => {
+
+      // 🔥 ACTUALIZAR estado en Firebase
+      await updateDoc(doc(db, "usuarios", state.sessionDocId), {
+        lat: lat,
+        lng: lng,
+        lastUpdate: serverTimestamp(),
+        online: true // ✅ Marcar como conectado
+      }); 
+
       console.log('═══════════════════════════════════════');
       console.log('📍 NUEVA UBICACIÓN RECIBIDA');
       console.log('═══════════════════════════════════════');
@@ -1774,20 +1783,26 @@ cancelRequestBtn.addEventListener("click", async () => {
 });
 
 /* Logout - Limpiar TODA la sesión y listeners */
-logoutBtn.addEventListener("click", () => {
+logoutBtn.addEventListener("click", async () => {
   console.log('═══════════════════════════════════════');
   console.log('👋 CERRANDO SESIÓN');
   console.log('═══════════════════════════════════════');
   
-  // 🔥 Limpiar TODOS los listeners de Firebase
-  // Esto es CRÍTICO para evitar fugas de memoria
-  state.unsubscribers.forEach(unsub => {
+  // 🔥 MARCAR COMO DESCONECTADO en Firebase
+  if (state.sessionDocId && state.role) {
     try {
-      unsub(); // Detener listener
+      const collectionName = state.role === "driver" ? "conductores" : "usuarios";
+      await updateDoc(doc(db, collectionName, state.sessionDocId), {
+        online: false, // Marcar como desconectado
+        lastUpdate: serverTimestamp()
+      });
+      
+      console.log('✅ Marcado como desconectado en Firebase');
     } catch (error) {
-      console.error('Error limpiando listener:', error);
+      console.error('❌ Error al marcar desconexión:', error);
     }
-  });
+  }
+  // ... resto del código de logout
   state.unsubscribers = []; // Vaciar array
   
   operatorVisibilityListeners.forEach(unsub => {
@@ -2718,56 +2733,62 @@ function openOperatorDetail(opId){
  * - Muestra sus marcadores en el mapa
  */
 function listenToActiveOperators() {
-  // Solo funciona si el rol es "user"
   if (state.role !== "user") return;
   
   console.log('═══════════════════════════════════════');
-  console.log('👤 USUARIO: Escuchando operadores...');
+  console.log('👤 USUARIO: Escuchando operadores ACTIVOS...');
   console.log('═══════════════════════════════════════');
   
-  // Limpiar listeners anteriores para evitar duplicados
   operatorVisibilityListeners.forEach(unsub => unsub());
   operatorVisibilityListeners = [];
   
-  // Si no hay ruta seleccionada, limpiar todo
   if (!state.selectedRouteId) {
     console.log('⚠️ Usuario sin ruta seleccionada');
-    state.operators = {}; // Vaciar lista de operadores
-    clearOperatorMarkers(); // Quitar marcadores del mapa
+    state.operators = {};
+    clearOperatorMarkers();
     return;
   }
   
   console.log('🔍 Escuchando ruta:', state.selectedRouteId);
   
-  // 🔥 QUERY DE FIREBASE: Buscar conductores que cumplan:
-  // 1. Tienen la misma ruta (routeId)
-  // 2. Están disponibles (disponible = true)
+  // 🔥 QUERY DE OPERADORES ACTIVOS Y DISPONIBLES
   const q = query(
     collection(db, "conductores"),
     where("routeId", "==", state.selectedRouteId),
     where("disponible", "==", true)
   );
   
-  // onSnapshot = escucha en TIEMPO REAL (se ejecuta cada vez que hay cambios)
   const unsubscribe = onSnapshot(q, (snapshot) => {
-    console.log('📡 Operadores activos detectados:', snapshot.size);
+    console.log('📡 Operadores encontrados:', snapshot.size);
     
-    // Limpiar lista anterior
     state.operators[state.selectedRouteId] = [];
     
-    // Recorrer cada documento encontrado
+    const now = Date.now();
+    const TIMEOUT_MS = 2 * 60 * 1000; // 2 minutos
+    
     snapshot.docs.forEach(doc => {
-      const op = doc.data(); // Datos del operador
+      const op = doc.data();
       
-      // Solo mostrar operadores con ubicación GPS
+      console.log('🚌 Operador:', op.unit, op.plate);
+      
+      // Validar ubicación
       if (!op.lat || !op.lng) {
-        console.log('⚠️ Operador sin ubicación:', op.unit);
-        return; // Saltar este operador
+        console.log('   ❌ Sin ubicación');
+        return;
       }
       
-      console.log(`✅ Operador ${op.unit} (${op.plate}) - Lat: ${op.lat}, Lng: ${op.lng}`);
+      // Validar sesión activa
+      const lastUpdate = op.lastUpdate?.toDate?.() || new Date(0);
+      const timeSinceUpdate = now - lastUpdate.getTime();
+      const minutesAgo = timeSinceUpdate / 1000 / 60;
       
-      // Agregar operador a la lista
+      if (timeSinceUpdate > TIMEOUT_MS) {
+        console.log(`   ⏰ RECHAZADO: Inactivo (${minutesAgo.toFixed(1)} min)`);
+        return;
+      }
+      
+      console.log(`   ✅ ACTIVO hace ${minutesAgo < 1 ? '<1' : minutesAgo.toFixed(0)} min`);
+      
       state.operators[state.selectedRouteId].push({
         id: op.id,
         name: op.name,
@@ -2780,19 +2801,15 @@ function listenToActiveOperators() {
       });
     });
     
-    // Actualizar marcadores en el mapa
     updateOperatorMarkersOnMap();
-    // Actualizar tiempo estimado de llegada
     updateETAUI();
     
     console.log('═══════════════════════════════════════');
   });
   
-  // Guardar el "unsubscribe" para poder detener el listener después
   operatorVisibilityListeners.push(unsubscribe);
   state.unsubscribers.push(unsubscribe);
 }
-
 /**
  * 🚌 FUNCIÓN PARA OPERADORES: Escuchar usuarios en mi ruta
  * 
@@ -2811,21 +2828,16 @@ function listenToActiveOperators() {
  * 3. Están conectados actualmente
  */
 function listenToActiveUsers() {
-  // Solo funciona si el rol es "driver"
   if (state.role !== "driver") return;
   
   console.log('═══════════════════════════════════════');
-  console.log('🚌 OPERADOR: Escuchando usuarios...');
+  console.log('🚌 OPERADOR: Escuchando usuarios ACTIVOS...');
   console.log('═══════════════════════════════════════');
   
-  // Limpiar listeners anteriores
   operatorVisibilityListeners.forEach(unsub => unsub());
   operatorVisibilityListeners = [];
-  
-  // Limpiar marcadores de usuarios del mapa
   clearUserMarkers();
   
-  // Obtener la ruta del operador
   const myRouteId = state.selectedRouteId || state.session?.routeId;
   
   if (!myRouteId) {
@@ -2835,61 +2847,57 @@ function listenToActiveUsers() {
   }
   
   console.log('🔍 Escuchando usuarios en ruta:', myRouteId);
-  console.log('📍 Mi ruta completa:', ROUTES.find(r => r.id === myRouteId)?.name);
   
-  // 🔥 QUERY DE FIREBASE: Buscar usuarios con ESTA ruta como preferida
+  // 🔥 QUERY CON FILTRO DE USUARIOS CONECTADOS
   const q = query(
     collection(db, "usuarios"),
-    where("preferredRouteId", "==", myRouteId) // ✅ SOLO esta ruta
+    where("preferredRouteId", "==", myRouteId)
   );
   
-  // Escucha en tiempo real
   const unsubscribe = onSnapshot(q, (snapshot) => {
     console.log('📡 Query ejecutado - Documentos encontrados:', snapshot.size);
     
-    // Limpiar marcadores anteriores
     clearUserMarkers();
     
     let validUsers = 0;
+    const now = Date.now();
+    const TIMEOUT_MS = 2 * 60 * 1000; // 2 minutos
     
-    // Recorrer cada usuario encontrado
     snapshot.docs.forEach(doc => {
-      const user = doc.data(); // Datos del usuario
+      const user = doc.data();
       const userId = doc.id;
       
       console.log('───────────────────────────────────────');
       console.log('👤 Usuario encontrado:', user.name);
       console.log('   Email:', user.email);
       console.log('   Ruta preferida:', user.preferredRouteId);
-      console.log('   Ubicación:', user.lat ? `${user.lat}, ${user.lng}` : 'Sin ubicación');
-      console.log('   Última actualización:', user.lastUpdate?.toDate?.() || 'N/A');
       
-      // ✅ VALIDACIÓN 1: Debe tener la MISMA ruta
+      // ✅ VALIDACIÓN 1: Misma ruta
       if (user.preferredRouteId !== myRouteId) {
         console.log('   ❌ RECHAZADO: Ruta diferente');
-        return; // Saltar este usuario
+        return;
       }
       
-      // ✅ VALIDACIÓN 2: Debe tener ubicación GPS
+      // ✅ VALIDACIÓN 2: Tiene ubicación
       if (!user.lat || !user.lng) {
         console.log('   ❌ RECHAZADO: Sin ubicación GPS');
-        return; // Saltar este usuario
+        return;
       }
       
-      // ✅ VALIDACIÓN 3: Ubicación reciente (últimos 5 minutos)
-      const now = Date.now();
+      // ✅ VALIDACIÓN 3: Sesión activa (actualización reciente)
       const lastUpdate = user.lastUpdate?.toDate?.() || new Date(0);
-      const minutesAgo = (now - lastUpdate.getTime()) / 1000 / 60;
+      const timeSinceUpdate = now - lastUpdate.getTime();
+      const minutesAgo = timeSinceUpdate / 1000 / 60;
       
-      if (minutesAgo > 5) {
-        console.log(`   ⚠️ RECHAZADO: Ubicación antigua (${minutesAgo.toFixed(1)} min)`);
-        return; // Saltar este usuario
+      if (timeSinceUpdate > TIMEOUT_MS) {
+        console.log(`   ⏰ RECHAZADO: Sesión inactiva (${minutesAgo.toFixed(1)} min sin actualizar)`);
+        return;
       }
       
-      console.log('   ✅ ACEPTADO: Mostrando en mapa');
+      console.log(`   ✅ ACEPTADO: Activo hace ${minutesAgo < 1 ? '<1' : minutesAgo.toFixed(0)} min`);
       validUsers++;
       
-      // Crear marcador de usuario en el mapa
+      // Crear marcador
       const marker = L.marker([user.lat, user.lng], { icon: personIcon })
         .addTo(state.map)
         .bindPopup(`
@@ -2897,30 +2905,25 @@ function listenToActiveUsers() {
             <strong>👤 ${user.name}</strong><br>
             <small>Email: ${user.email}</small><br>
             <small>Ruta: ${ROUTES.find(r => r.id === myRouteId)?.name}</small><br>
-            <small>Hace ${minutesAgo < 1 ? 'menos de 1 min' : minutesAgo.toFixed(0) + ' min'}</small>
+            <small>🟢 Activo hace ${minutesAgo < 1 ? 'menos de 1 min' : minutesAgo.toFixed(0) + ' min'}</small>
           </div>
         `);
       
-      // Guardar marcador en la lista
       if (!state.requestLayers.has(myRouteId)) {
-        state.requestLayers.set(myRouteId, []); // Crear array si no existe
+        state.requestLayers.set(myRouteId, []);
       }
       state.requestLayers.get(myRouteId).push(marker);
     });
     
     console.log('───────────────────────────────────────');
-    console.log(`✅ Usuarios VÁLIDOS mostrados: ${validUsers}`);
-    console.log(`📊 Total marcadores en mapa: ${state.requestLayers.get(myRouteId)?.length || 0}`);
+    console.log(`✅ Usuarios ACTIVOS mostrados: ${validUsers}`);
+    console.log('═══════════════════════════════════════');
     
-    // Actualizar contador en el panel
     if (requestCount) {
       requestCount.textContent = String(validUsers);
     }
-    
-    console.log('═══════════════════════════════════════');
   });
   
-  // Guardar unsubscribe
   operatorVisibilityListeners.push(unsubscribe);
   state.unsubscribers.push(unsubscribe);
 }
@@ -3017,4 +3020,4 @@ function clearUserMarkers() {
   /* Logout */
 }
 
-logoutBtn 
+addEventListener
