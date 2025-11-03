@@ -665,9 +665,9 @@ async function enterMapView(isRestore=false) {
     
     updateOperatorSeatsDisplay(); 
     updateETAUI();
-    updateRequestCount();
+    //updateRequestCount();
     startUserPosPolling();
-    startRequestPollingOperator();
+    //startRequestPollingOperator();
     chatNavBtnOp.hidden = false;
     
     // 🔥 Si el operador tiene ruta Y está ACTIVO, escuchar usuarios
@@ -1338,18 +1338,37 @@ function autoStartGeolocation() {
 /**
  * Verificar y mostrar botón de permisos si es necesario
  */
+/**
+ * Verificar y mostrar botón de permisos si es necesario
+ * (VERSIÓN SIN RECARGA)
+ */
 function ensureGeoPermissionPrompt() {
-  if (!enableLocationBtn) return;
+  if (!enableLocationBtn) {
+    console.log('⚠️ Botón de ubicación no encontrado');
+    return;
+  }
+  
+  console.log('🔍 Verificando permisos de ubicación...');
   
   if (navigator.permissions && navigator.permissions.query) {
     navigator.permissions.query({ name: "geolocation" })
       .then(res => {
-        enableLocationBtn.style.display = (res.state === "granted") ? "none" : "inline-flex";
+        console.log('📋 Estado de permisos:', res.state);
+        
+        if (res.state === "granted") {
+          enableLocationBtn.style.display = "none";
+          console.log('✅ Permisos ya concedidos - ocultando botón');
+        } else {
+          enableLocationBtn.style.display = "inline-flex";
+          console.log('⚠️ Permisos no concedidos - mostrando botón');
+        }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn('⚠️ No se pudo verificar permisos:', err);
         enableLocationBtn.style.display = "inline-flex";
       });
   } else {
+    console.log('⚠️ Permissions API no disponible');
     enableLocationBtn.style.display = "inline-flex";
   }
 }
@@ -1358,22 +1377,45 @@ function ensureGeoPermissionPrompt() {
  * Botón de activar ubicación
  */
 // 📍 Botón para solicitar permisos de ubicación manualmente
+// 📍 Botón para solicitar permisos manualmente (VERSIÓN MEJORADA)
 if (enableLocationBtn) {
-  onTap(enableLocationBtn, async () => {
-    console.log('🖱️ Botón de activar ubicación presionado');
+  // Usar addEventListener en lugar de onTap para mejor control
+  enableLocationBtn.addEventListener('click', async (e) => {
+    // ⚠️ CRÍTICO: Prevenir cualquier comportamiento por defecto
+    e.preventDefault();
+    e.stopPropagation();
     
-    // IMPORTANTE: Prevenir recarga o navegación
+    console.log('═══════════════════════════════════════');
+    console.log('🖱️ Botón de ubicación presionado');
+    console.log('═══════════════════════════════════════');
+    
+    // Deshabilitar botón temporalmente
     enableLocationBtn.disabled = true;
-    enableLocationBtn.textContent = "Activando...";
+    enableLocationBtn.textContent = "⏳ Activando GPS...";
+    enableLocationBtn.style.opacity = "0.6";
     
-    // Solicitar permisos y empezar watchPosition
-    await watchPosition();
-    
-    // Restaurar botón después de 2 segundos
-    setTimeout(() => {
+    try {
+      // Intentar obtener ubicación
+      await watchPosition();
+      
+      // Éxito: ocultar botón
+      setTimeout(() => {
+        enableLocationBtn.style.display = "none";
+        console.log('✅ Ubicación activada - ocultando botón');
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Error al activar ubicación:', error);
+      
+      // Restaurar botón en caso de error
       enableLocationBtn.disabled = false;
       enableLocationBtn.textContent = "Activar Ubicación";
-    }, 2000);
+      enableLocationBtn.style.opacity = "1";
+      
+      alert('No se pudo activar la ubicación. Verifica los permisos en la configuración.');
+    }
+    
+    console.log('═══════════════════════════════════════');
   });
 }
 
@@ -1596,11 +1638,25 @@ function setRequests(obj) {
   state.requests = obj;
 }
 
+// 🔢 Actualizar contador de usuarios (solo para operadores)
 function updateRequestCount() {
-  const rr = getRouteRequests();
-  const list = rr[state.session?.routeId] || [];
-  const activeCount = list.filter(x=>x.active!==false).length;
-  requestCount.textContent = String(activeCount);
+  if (state.role !== "driver") return;
+  
+  const myRouteId = state.selectedRouteId || state.session?.routeId;
+  if (!myRouteId) {
+    if (requestCount) requestCount.textContent = "0";
+    return;
+  }
+  
+  // Contar marcadores de usuarios en el mapa
+  const markers = state.requestLayers.get(myRouteId) || [];
+  const count = markers.length;
+  
+  if (requestCount) {
+    requestCount.textContent = String(count);
+  }
+  
+  console.log(`📊 Usuarios en ruta ${myRouteId}: ${count}`);
 }
 
 /* Find nearest operator on route to user */
@@ -1619,46 +1675,56 @@ function findNearestOperator(routeId, userLatLng) {
 requestBtn.addEventListener("click", async () => {
   // replace click with hybrid onTap
 });
+// 📍 USUARIO: Solicitar unidad (VERSIÓN LIMPIA)
 onTap(requestBtn, async () => {
-  if (!state.session) { statusEl.textContent = "Debes iniciar sesión para solicitar una unidad."; return; }
+  if (!state.session) { 
+    statusEl.textContent = "Debes iniciar sesión para solicitar una unidad."; 
+    return; 
+  }
+  
   const rid = state.selectedRouteId;
-  if (!rid) { statusEl.textContent = "Selecciona una ruta primero."; return; }
-  const reqs = getRequests();
-  reqs[rid] = (reqs[rid] || 0) + 1;
-  setRequests(reqs);
-  statusEl.textContent = "Solicitud enviada. Buscando próxima unidad...";
-  // show nearest operator marker popup
-  let userPos = null;
-  if (state.userMarker) {
-    const ll = state.userMarker.getLatLng();
-    userPos = { lat: ll.lat, lng: ll.lng };
+  if (!rid) { 
+    statusEl.textContent = "Selecciona una ruta primero."; 
+    return; 
   }
-  const op = userPos ? findNearestOperator(rid, userPos) : null;
-  if (op) {
-    const marker = L.marker([op.lat, op.lng]).addTo(state.map).bindPopup(`Próxima unidad: ${op.unit} (${op.plate})`).openPopup();
-    setTimeout(() => state.map.removeLayer(marker), 8000);
-    statusEl.textContent = "Unidad localizada.";
-    updateETAUI();
+  
+  console.log('═══════════════════════════════════════');
+  console.log('📍 Usuario solicitando unidad');
+  console.log('Ruta:', rid);
+  console.log('Usuario:', state.session.email);
+  console.log('═══════════════════════════════════════');
+  
+  // ✅ SOLO actualizar en Firebase (no en localStorage)
+  if (state.sessionDocId) {
+    try {
+      await updateDoc(doc(db, "usuarios", state.sessionDocId), {
+        preferredRouteId: rid, // Marcar esta ruta como preferida
+        lastUpdate: serverTimestamp()
+      });
+      
+      console.log('✅ Ruta preferida guardada en Firebase');
+    } catch (error) {
+      console.error('❌ Error guardando ruta:', error);
+      statusEl.textContent = "Error al solicitar unidad. Intenta de nuevo.";
+      return;
+    }
+  }
+  
+  
+  statusEl.textContent = "✅ Solicitud enviada. Buscando unidades cercanas...";
+  
+  // Verificar si hay operadores activos
+  if (state.operators[rid] && state.operators[rid].length > 0) {
+    const op = state.operators[rid][0]; // Primer operador
+    statusEl.textContent = `✅ Unidad ${op.unit} (${op.plate}) encontrada.`;
   } else {
-    statusEl.textContent = "No hay unidades activas en esta ruta ahora.";
+    statusEl.textContent = "⚠️ No hay unidades activas en esta ruta ahora.";
   }
-  // persist detailed request with user location
-  if (state.userMarker) {
-    const ll = state.userMarker.getLatLng();
-    const rr = getRouteRequests();
-    rr[rid] = rr[rid] || [];
-    rr[rid].push({ lat: ll.lat, lng: ll.lng, name: state.session?.name || "Usuario", email: state.session?.email || "", at: Date.now(), active: true });
-    setRouteRequests(rr);
-    // if a driver is viewing this route, refresh markers
-    if (state.role === "driver" && state.session.routeId === rid) renderRequestMarkers(rid);
-  }
-  // log travel history
-  const hist = JSON.parse(localStorage.getItem("travel_history") || "[]");
-  const rname = ROUTES.find(r=>r.id===rid)?.name || rid;
-  hist.push({ routeId: rid, routeName: rname, at: new Date().toISOString() });
-  localStorage.setItem("travel_history", JSON.stringify(hist));
-  // mostrar todas las unidades activas en la ruta seleccionada
-  showActiveOperatorsForRoute(rid);
+  
+  updateETAUI();
+  
+  console.log('✅ Solicitud procesada');
+  console.log('═══════════════════════════════════════');
 });
 
 // 🚫 USUARIO: Cancelar solicitud de unidad
@@ -2551,7 +2617,7 @@ function deleteAccountAndLogout(role){
   if(role==="user"){
     const users=db.read(DB_KEYS.users).filter(u=>u.email!==state.session.email);
     db.write(DB_KEYS.users, users);
-    const rr=getRouteRequests(); Object.keys(rr).forEach(rid=> rr[rid]=(rr[rid]||[]).filter(x=>x.email!==state.session.email)); setRouteRequests(rr);
+    const rr=getRouteRequests(); Object.keys(rr).forEach(rid=> rr[rid]=(rr[rid]||[]).filter(x=>x.email!==state.session.email)); 
   }else{
     const drivers=db.read(DB_KEYS.drivers).filter(d=>d.email!==state.session.email);
     db.write(DB_KEYS.drivers, drivers);
@@ -2598,19 +2664,8 @@ function showActiveOperatorsForRoute(routeId){
   state.activeOpMarkers.set(routeId, markers);
 }
 
-function startRequestPollingOperator(){
-  if (state.role!=="driver") return;
-  if (state.requestPollTimer) return;
-  state.requestPollTimer = setInterval(()=>{
-    const rid = state.selectedRouteId || state.session?.routeId;
-    if (!rid) return;
-    renderRequestMarkers(rid);
-  }, 4000);
-}
 
-function stopRequestPollingOperator(){
-  if (state.requestPollTimer){ clearInterval(state.requestPollTimer); state.requestPollTimer=null; }
-}
+
 
 /* init filters */
 const MUNICIPALITIES = {
@@ -2929,4 +2984,3 @@ function clearUserMarkers() {
   // CAMBIO 2: Reemplazar routeSelect.addEventListener
   /* Logout */
 }
-
