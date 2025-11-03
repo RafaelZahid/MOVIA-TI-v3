@@ -625,7 +625,7 @@ console.log('✅ Iconos profesionales del mapa cargados');
 
 /* origin/destination markers */
 let originMarker = null, destMarker = null, userPathLayer = null;
-let lastUserMarker = null, userPosPoll = null;
+//let lastUserMarker = null, userPosPoll = null;
 let odMarkers = [], waypointMarkers = [];
 let operatorVisibilityListeners = [];
 
@@ -666,7 +666,7 @@ async function enterMapView(isRestore=false) {
     updateOperatorSeatsDisplay(); 
     updateETAUI();
     //updateRequestCount();
-    startUserPosPolling();
+    //startUserPosPolling();
     //startRequestPollingOperator();
     chatNavBtnOp.hidden = false;
     
@@ -2528,15 +2528,6 @@ function updateLastUserMarkerFromStorage(){
     }
   }catch{}
 }
-function startUserPosPolling(){
-  updateLastUserMarkerFromStorage();
-  if (userPosPoll) return;
-  userPosPoll = setInterval(updateLastUserMarkerFromStorage, 4000);
-}
-function stopUserPosPolling(){
-  if (userPosPoll) { clearInterval(userPosPoll); userPosPoll = null; }
-  if (lastUserMarker && state.map) { state.map.removeLayer(lastUserMarker); lastUserMarker = null; }
-}
 
 function countActiveOperators(routeId){
   const ops = JSON.parse(localStorage.getItem("operators") || "{}")[routeId] || [];
@@ -2811,6 +2802,14 @@ function listenToActiveOperators() {
  * - Detecta todos los usuarios que seleccionaron su ruta
  * - Muestra sus marcadores en el mapa
  */
+/**
+ * 🚌 FUNCIÓN PARA OPERADORES: Escuchar usuarios en mi ruta
+ * 
+ * SOLO muestra usuarios que:
+ * 1. Tienen la MISMA ruta seleccionada (preferredRouteId)
+ * 2. Tienen ubicación GPS activa
+ * 3. Están conectados actualmente
+ */
 function listenToActiveUsers() {
   // Solo funciona si el rol es "driver"
   if (state.role !== "driver") return;
@@ -2831,35 +2830,64 @@ function listenToActiveUsers() {
   
   if (!myRouteId) {
     console.log('⚠️ Operador sin ruta asignada');
+    if (requestCount) requestCount.textContent = "0";
     return;
   }
   
   console.log('🔍 Escuchando usuarios en ruta:', myRouteId);
+  console.log('📍 Mi ruta completa:', ROUTES.find(r => r.id === myRouteId)?.name);
   
-  // 🔥 QUERY DE FIREBASE: Buscar usuarios que tienen esta ruta como preferida
+  // 🔥 QUERY DE FIREBASE: Buscar usuarios con ESTA ruta como preferida
   const q = query(
     collection(db, "usuarios"),
-    where("preferredRouteId", "==", myRouteId)
+    where("preferredRouteId", "==", myRouteId) // ✅ SOLO esta ruta
   );
   
   // Escucha en tiempo real
   const unsubscribe = onSnapshot(q, (snapshot) => {
-    console.log('📡 Usuarios detectados:', snapshot.size);
+    console.log('📡 Query ejecutado - Documentos encontrados:', snapshot.size);
     
     // Limpiar marcadores anteriores
     clearUserMarkers();
     
+    let validUsers = 0;
+    
     // Recorrer cada usuario encontrado
     snapshot.docs.forEach(doc => {
       const user = doc.data(); // Datos del usuario
+      const userId = doc.id;
       
-      // Solo mostrar usuarios con ubicación GPS
-      if (!user.lat || !user.lng) {
-        console.log('⚠️ Usuario sin ubicación:', user.name);
+      console.log('───────────────────────────────────────');
+      console.log('👤 Usuario encontrado:', user.name);
+      console.log('   Email:', user.email);
+      console.log('   Ruta preferida:', user.preferredRouteId);
+      console.log('   Ubicación:', user.lat ? `${user.lat}, ${user.lng}` : 'Sin ubicación');
+      console.log('   Última actualización:', user.lastUpdate?.toDate?.() || 'N/A');
+      
+      // ✅ VALIDACIÓN 1: Debe tener la MISMA ruta
+      if (user.preferredRouteId !== myRouteId) {
+        console.log('   ❌ RECHAZADO: Ruta diferente');
         return; // Saltar este usuario
       }
       
-      console.log(`✅ Usuario ${user.name} - Lat: ${user.lat}, Lng: ${user.lng}`);
+      // ✅ VALIDACIÓN 2: Debe tener ubicación GPS
+      if (!user.lat || !user.lng) {
+        console.log('   ❌ RECHAZADO: Sin ubicación GPS');
+        return; // Saltar este usuario
+      }
+      
+      // ✅ VALIDACIÓN 3: Ubicación reciente (últimos 5 minutos)
+      const now = Date.now();
+      const lastUpdate = user.lastUpdate?.toDate?.() || new Date(0);
+      const minutesAgo = (now - lastUpdate.getTime()) / 1000 / 60;
+      
+      if (minutesAgo > 5) {
+        console.log(`   ⚠️ RECHAZADO: Ubicación antigua (${minutesAgo.toFixed(1)} min)`);
+        return; // Saltar este usuario
+      }
+      
+      console.log('   ✅ ACEPTADO: Mostrando en mapa');
+      validUsers++;
       
       // Crear marcador de usuario en el mapa
       const marker = L.marker([user.lat, user.lng], { icon: personIcon })
@@ -2867,7 +2895,9 @@ function listenToActiveUsers() {
         .bindPopup(`
           <div style="text-align: center;">
             <strong>👤 ${user.name}</strong><br>
-            <small>Ruta: ${ROUTES.find(r => r.id === myRouteId)?.name}</small>
+            <small>Email: ${user.email}</small><br>
+            <small>Ruta: ${ROUTES.find(r => r.id === myRouteId)?.name}</small><br>
+            <small>Hace ${minutesAgo < 1 ? 'menos de 1 min' : minutesAgo.toFixed(0) + ' min'}</small>
           </div>
         `);
       
@@ -2878,13 +2908,15 @@ function listenToActiveUsers() {
       state.requestLayers.get(myRouteId).push(marker);
     });
     
-    // Actualizar contador de usuarios en el panel
-    const userCount = state.requestLayers.get(myRouteId)?.length || 0;
+    console.log('───────────────────────────────────────');
+    console.log(`✅ Usuarios VÁLIDOS mostrados: ${validUsers}`);
+    console.log(`📊 Total marcadores en mapa: ${state.requestLayers.get(myRouteId)?.length || 0}`);
+    
+    // Actualizar contador en el panel
     if (requestCount) {
-      requestCount.textContent = String(userCount);
+      requestCount.textContent = String(validUsers);
     }
     
-    console.log(`📊 Total usuarios visibles: ${userCount}`);
     console.log('═══════════════════════════════════════');
   });
   
@@ -2984,3 +3016,5 @@ function clearUserMarkers() {
   // CAMBIO 2: Reemplazar routeSelect.addEventListener
   /* Logout */
 }
+
+logoutBtn 
