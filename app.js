@@ -407,11 +407,221 @@ function initMap(containerId = "map") {
 
 
 /* custom icons */
-const personIcon = L.divIcon({ className:"", html:'<div style="width:28px;height:28px;border-radius:50%;background:#1976D2;display:grid;place-items:center;color:#fff;font-size:18px;box-shadow:0 4px 10px rgba(0,0,0,.2)">👤</div>', iconSize:[28,28], iconAnchor:[14,28] });
-const combiIcon = L.divIcon({ className:"", html:'<div style="width:32px;height:32px;border-radius:8px;background:#43A047;display:grid;place-items:center;color:#fff;font-size:18px;box-shadow:0 4px 10px rgba(0,0,0,.2)">🚌</div>', iconSize:[32,32], iconAnchor:[16,32] });
-const stopIcon = L.divIcon({ className:"", html:'<div style="font-size:18px;line-height:1">🚦</div>', iconSize:[18,18], iconAnchor:[9,9] });
-const originIcon = L.divIcon({ className:"", html:'<div style="font-size:22px;line-height:1">🟢</div>', iconSize:[22,22], iconAnchor:[11,11] });
-const destIcon = L.divIcon({ className:"", html:'<div style="font-size:22px;line-height:1">🟠</div>', iconSize:[22,22], iconAnchor:[11,11] });
+// ============================================
+// 🎨 ICONOS PROFESIONALES PARA EL MAPA
+// ============================================
+
+/**
+ * 👤 Icono de Usuario - Marcador azul con silueta de persona
+ */
+const personIcon = L.divIcon({
+  className: "",
+  html: `
+    <div style="
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 3px solid white;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">
+      <div style="
+        width: 18px;
+        height: 18px;
+        background: white;
+        border-radius: 50%;
+        transform: rotate(45deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#1976D2">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+        </svg>
+      </div>
+    </div>
+  `,
+  iconSize: [36, 36],
+  iconAnchor: [18, 36],
+  popupAnchor: [0, -36]
+});
+
+/**
+ * 🚌 Icono de Combi/Operador - Marcador verde con icono de autobús
+ */
+const combiIcon = L.divIcon({
+  className: "",
+  html: `
+    <div style="
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #43A047 0%, #2E7D32 100%);
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 3px solid white;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    ">
+      <div style="
+        width: 22px;
+        height: 22px;
+        background: white;
+        border-radius: 4px;
+        transform: rotate(45deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#43A047">
+          <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
+        </svg>
+      </div>
+      <!-- Indicador de pulso animado -->
+      <div style="
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2px solid #43A047;
+        animation: pulse 2s infinite;
+        transform: rotate(45deg);
+      "></div>
+    </div>
+    <style>
+      @keyframes pulse {
+        0% { transform: rotate(45deg) scale(1); opacity: 1; }
+        100% { transform: rotate(45deg) scale(1.5); opacity: 0; }
+      }
+    </style>
+  `,
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+  popupAnchor: [0, -40]
+});
+
+/**
+ * 🚦 Icono de Parada - Círculo naranja con señal
+ */
+const stopIcon = L.divIcon({
+  className: "",
+  html: `
+    <div style="
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+      </svg>
+    </div>
+  `,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -12]
+});
+
+/**
+ * 🟢 Icono de Origen - Círculo verde brillante
+ */
+const originIcon = L.divIcon({
+  className: "",
+  html: `
+    <div style="
+      width: 28px;
+      height: 28px;
+      background: radial-gradient(circle, #4CAF50 0%, #2E7D32 100%);
+      border-radius: 50%;
+      border: 3px solid white;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    ">
+      <div style="
+        width: 10px;
+        height: 10px;
+        background: white;
+        border-radius: 50%;
+        box-shadow: 0 0 8px rgba(76, 175, 80, 0.8);
+      "></div>
+      <!-- Anillo animado -->
+      <div style="
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 2px solid #4CAF50;
+        animation: ripple 2s infinite;
+      "></div>
+    </div>
+    <style>
+      @keyframes ripple {
+        0% { transform: scale(1); opacity: 1; }
+        100% { transform: scale(1.8); opacity: 0; }
+      }
+    </style>
+  `,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+  popupAnchor: [0, -14]
+});
+
+/**
+ * 🔴 Icono de Destino - Círculo rojo brillante
+ */
+const destIcon = L.divIcon({
+  className: "",
+  html: `
+    <div style="
+      width: 28px;
+      height: 28px;
+      background: radial-gradient(circle, #F44336 0%, #C62828 100%);
+      border-radius: 50%;
+      border: 3px solid white;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    ">
+      <div style="
+        width: 10px;
+        height: 10px;
+        background: white;
+        border-radius: 50%;
+        box-shadow: 0 0 8px rgba(244, 67, 54, 0.8);
+      "></div>
+      <!-- Anillo animado -->
+      <div style="
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 2px solid #F44336;
+        animation: ripple 2s infinite 0.5s;
+      "></div>
+    </div>
+  `,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+  popupAnchor: [0, -14]
+});
+
+console.log('✅ Iconos profesionales del mapa cargados');
 
 /* origin/destination markers */
 let originMarker = null, destMarker = null, userPathLayer = null;
@@ -1147,10 +1357,23 @@ function ensureGeoPermissionPrompt() {
 /**
  * Botón de activar ubicación
  */
+// 📍 Botón para solicitar permisos de ubicación manualmente
 if (enableLocationBtn) {
   onTap(enableLocationBtn, async () => {
     console.log('🖱️ Botón de activar ubicación presionado');
+    
+    // IMPORTANTE: Prevenir recarga o navegación
+    enableLocationBtn.disabled = true;
+    enableLocationBtn.textContent = "Activando...";
+    
+    // Solicitar permisos y empezar watchPosition
     await watchPosition();
+    
+    // Restaurar botón después de 2 segundos
+    setTimeout(() => {
+      enableLocationBtn.disabled = false;
+      enableLocationBtn.textContent = "Activar Ubicación";
+    }, 2000);
   });
 }
 
@@ -1438,20 +1661,50 @@ onTap(requestBtn, async () => {
   showActiveOperatorsForRoute(rid);
 });
 
-cancelRequestBtn.addEventListener("click", () => {
+// 🚫 USUARIO: Cancelar solicitud de unidad
+cancelRequestBtn.addEventListener("click", async () => {
   const rid = state.selectedRouteId;
-  if (!rid) { statusEl.textContent = "Selecciona una ruta primero."; return; }
-  const rr = getRouteRequests(); const list = rr[rid] || [];
-  const email = state.session?.email || "";
-  rr[rid] = list.filter(req => req.email !== email);
-  setRouteRequests(rr);
-  const reqs = getRequests(); reqs[rid] = Math.max(0, (reqs[rid] || 0) - 1); setRequests(reqs);
+  
+  if (!rid) { 
+    statusEl.textContent = "Selecciona una ruta primero."; 
+    return; 
+  }
+  
+  console.log('═══════════════════════════════════════');
+  console.log('Usuario cancelando solicitud');
+  console.log('Ruta:', rid);
+  console.log('═══════════════════════════════════════');
+  
+  // 🔥 Actualizar en Firebase para quitar preferredRouteId
+  if (state.sessionDocId) {
+    try {
+      await updateDoc(doc(db, "usuarios", state.sessionDocId), {
+        preferredRouteId: null, // Quitar ruta preferida
+        lastUpdate: serverTimestamp()
+      });
+      
+      console.log(' Ruta preferida eliminada de Firebase');
+    } catch (error) {
+      console.error(' Error eliminando ruta:', error);
+    }
+  }
+  
+  // Limpiar estado local
+  state.selectedRouteId = null;
+  routeSelect.value = "";
+  
+  // Detener escucha de operadores
+  operatorVisibilityListeners.forEach(unsub => unsub());
+  operatorVisibilityListeners = [];
+  
+  // Limpiar visuales del mapa
+  clearRouteVisuals();
+  clearOperatorMarkers();
+  
   statusEl.textContent = "Has dejado de solicitar esta ruta.";
-  if (state.role === "driver" && state.session.routeId === rid) renderRequestMarkers(rid);
-  // limpiar marcadores de operadores en el mapa del usuario
-  const arr = state.activeOpMarkers.get(rid)||[];
-  arr.forEach(m=> state.map.removeLayer(m));
-  state.activeOpMarkers.delete(rid);
+  
+  console.log('Solicitud cancelada correctamente');
+  console.log('═══════════════════════════════════════');
 });
 
 /* Logout - Limpiar TODA la sesión y listeners */
@@ -2676,3 +2929,4 @@ function clearUserMarkers() {
   // CAMBIO 2: Reemplazar routeSelect.addEventListener
   /* Logout */
 }
+
