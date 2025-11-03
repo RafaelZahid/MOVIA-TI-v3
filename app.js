@@ -419,40 +419,101 @@ let lastUserMarker = null, userPosPoll = null;
 let odMarkers = [], waypointMarkers = [];
 let operatorVisibilityListeners = [];
 
-/* Enter map view */
+/* Enter map view - Se ejecuta cuando el usuario/operador entra al mapa después de login */
 async function enterMapView(isRestore=false) {
+  console.log('═══════════════════════════════════════');
+  console.log('🚀 ENTRANDO AL MAPA');
+  console.log('Rol:', state.role);
+  console.log('═══════════════════════════════════════');
+  
   authView.hidden = true;
   const topbar = document.querySelector(".topbar");
-  topbar.hidden = false; logoutBtn.hidden = false; chatView.hidden = true;
+  topbar.hidden = false; 
+  logoutBtn.hidden = false; 
+  chatView.hidden = true;
+  
   if (state.role === "driver") {
-    mapView.hidden = true; operatorMapView.hidden = false;
-    initMap("opMap");
-    routeSelectOp.innerHTML = `<option value="">Sin asignar</option>` + ROUTES.map(r=>`<option value="${r.id}">${r.name}</option>`).join("");
-    routeSelectOp.value = ""; state.selectedRouteId = null;
+    // ═══════════════════════════════════════
+    // 🚌 VISTA DE OPERADOR
+    // ═══════════════════════════════════════
+    mapView.hidden = true; 
+    operatorMapView.hidden = false;
+    initMap("opMap"); // Inicializar mapa en el div "opMap"
+    
+    // Llenar selector de rutas
+    routeSelectOp.innerHTML = `<option value="">Sin asignar</option>` + 
+      ROUTES.map(r=>`<option value="${r.id}">${r.name}</option>`).join("");
+    routeSelectOp.value = ""; 
+    state.selectedRouteId = null;
+    
+    // Mostrar ruta guardada en sesión (si existe)
     const ridSess = state.session?.routeId || "";
-    driverRouteName.textContent = ridSess ? (ROUTES.find(r=>r.id===ridSess)?.name || "--") : "--";
+    driverRouteName.textContent = ridSess ? 
+      (ROUTES.find(r=>r.id===ridSess)?.name || "--") : "--";
+    
     driverPanel.hidden = false;
-    // solo dibujar/actualizar cuando el operador seleccione ruta
-    updateOperatorSeatsDisplay(); updateETAUI();
+    
+    updateOperatorSeatsDisplay(); 
+    updateETAUI();
     updateRequestCount();
     startUserPosPolling();
     startRequestPollingOperator();
     chatNavBtnOp.hidden = false;
+    
+    // 🔥 Si el operador tiene ruta Y está ACTIVO, escuchar usuarios
+    if (ridSess && state.session?.disponible) {
+      state.selectedRouteId = ridSess;
+      routeSelectOp.value = ridSess;
+      await drawSelectedRoute(ridSess, true); // Dibujar ruta en mapa
+      listenToActiveUsers(); // Iniciar escucha de usuarios
+      console.log('🎯 Operador ACTIVO: escuchando usuarios');
+    }
+    
   } else {
-    operatorMapView.hidden = true; mapView.hidden = false; initMap("map");
-    requestBtn.style.display = "inline-flex"; routeSelect.value = ""; state.selectedRouteId = null;
+    // ═══════════════════════════════════════
+    // 👤 VISTA DE USUARIO
+    // ═══════════════════════════════════════
+    operatorMapView.hidden = true; 
+    mapView.hidden = false; 
+    initMap("map"); // Inicializar mapa en el div "map"
+    
+    requestBtn.style.display = "inline-flex"; 
+    routeSelect.value = ""; 
+    state.selectedRouteId = null;
+    
     if (chatNavBtn) chatNavBtn.hidden = false;
-    // ensure user location visible on login
-    navigator.geolocation.getCurrentPosition(p=>{
-      const ll=[p.coords.latitude,p.coords.longitude];
+    
+    // Obtener ubicación GPS del usuario
+    navigator.geolocation.getCurrentPosition(async (p) => {
+      const ll=[p.coords.latitude, p.coords.longitude];
+      
+      // Crear/actualizar marcador de usuario
       if (!state.userMarker) {
-        state.userMarker = L.marker(ll,{icon:personIcon}).addTo(state.map).bindPopup("Tu ubicación");
-      } else state.userMarker.setLatLng(ll);
-      state.map.setView(ll, 15);
+        state.userMarker = L.marker(ll, {icon:personIcon})
+          .addTo(state.map)
+          .bindPopup("Tu ubicación");
+      } else {
+        state.userMarker.setLatLng(ll);
+      }
+      
+      state.map.setView(ll, 15); // Centrar mapa en usuario
+      
+      // 🔥 Si el usuario tiene ruta preferida, cargarla y escuchar operadores
+      const preferredRoute = state.session?.preferredRouteId;
+      if (preferredRoute) {
+        state.selectedRouteId = preferredRoute;
+        routeSelect.value = preferredRoute;
+        await drawSelectedRoute(preferredRoute, true); // Dibujar ruta
+        listenToActiveOperators(); // Iniciar escucha de operadores
+        console.log('🎯 Usuario con ruta preferida: escuchando operadores');
+      }
     }, ()=>{ /* silent */ }, { enableHighAccuracy:true, timeout:8000 });
   }
+  
   ensureGeoPermissionPrompt();
-  watchPosition();
+  watchPosition(); // Iniciar seguimiento GPS continuo
+  
+  console.log('═══════════════════════════════════════');
 }
 
 // ============================================
@@ -702,9 +763,6 @@ function showPermissionDeniedMessage() {
     setTimeout(() => message.remove(), 300);
   }, 5000);
 }
-
-
-
 
 // ============================================
 // SOLUCIÓN MEJORADA - FORZAR PERMISOS EN ANDROID
@@ -1067,8 +1125,6 @@ function autoStartGeolocation() {
   }, 1000);
 }
 
-
-
 /**
  * Verificar y mostrar botón de permisos si es necesario
  */
@@ -1183,60 +1239,104 @@ async function drawSelectedRoute(routeId, fit=false) {
 
 /* Route selection change */
 // CAMBIO 2: Reemplazar routeSelect.addEventListener
+// 📱 USUARIO: Cuando cambia la ruta en el menú desplegable
 routeSelect.addEventListener("change", async e => {
-  const rid = e.target.value;
+  const rid = e.target.value; // ID de la ruta seleccionada
   
+  console.log('═══════════════════════════════════════');
+  console.log('👤 USUARIO cambió ruta a:', rid || 'ninguna');
+  console.log('═══════════════════════════════════════');
+  
+  // Guardar ruta seleccionada en el estado
   state.selectedRouteId = rid || null;
-  clearRouteVisuals();
-  clearOperatorMarkers(); // Nueva función
   
+  // Limpiar visuales anteriores
+  clearRouteVisuals(); // Quitar líneas de ruta
+  clearOperatorMarkers(); // Quitar marcadores de operadores
+  
+  // Si no hay ruta seleccionada
   if (!rid) {
     statusEl.textContent = "Selecciona una ruta para ver unidades disponibles.";
-    state.operators = {};
+    state.operators = {}; // Vaciar lista de operadores
+    
+    // 🔥 DETENER listeners de Firebase
+    operatorVisibilityListeners.forEach(unsub => unsub());
+    operatorVisibilityListeners = [];
     return;
   }
   
   const routeName = ROUTES.find(r => r.id === rid)?.name || rid;
   statusEl.textContent = `Buscando unidades en ${routeName}...`;
   
+  // 🔥 GUARDAR ruta preferida en Firebase
+  if (state.sessionDocId) {
+    try {
+      await updateDoc(doc(db, "usuarios", state.sessionDocId), {
+        preferredRouteId: rid, // Campo que lee el operador
+        lastUpdate: serverTimestamp()
+      });
+      
+      console.log('✅ Ruta guardada en Firebase');
+    } catch (error) {
+      console.error('❌ Error guardando ruta:', error);
+    }
+  }
+  
+  // Dibujar la ruta en el mapa
   if (rid) {
     await drawSelectedRoute(rid, true);
   }
   
-  // ESTO ES LO NUEVO: Escuchar operadores de esta ruta
-  listenToActiveOperators(); // Nueva función
+  // 🔥 INICIAR escucha de operadores activos en esta ruta
+  listenToActiveOperators();
   
-  updateETAUI();
+  updateETAUI(); // Actualizar tiempo estimado de llegada
 });
 
 // CAMBIO 3: Reemplazar routeSelectOp.addEventListener
+// 🚌 OPERADOR: Cuando cambia la ruta en el menú desplegable
 routeSelectOp?.addEventListener("change", async e => {
-  const rid = e.target.value;
+  const rid = e.target.value; // ID de la ruta seleccionada
   
+  console.log('═══════════════════════════════════════');
+  console.log('🚌 OPERADOR cambió ruta a:', rid || 'ninguna');
+  console.log('═══════════════════════════════════════');
+  
+  // Guardar ruta en el estado
   state.selectedRouteId = rid || null;
   
+  // Actualizar nombre de ruta en el panel
   const driverRouteName = document.getElementById("driverRouteName");
   if (driverRouteName) {
     driverRouteName.textContent = rid ? (ROUTES.find(r => r.id === rid)?.name || "--") : "--";
   }
   
-  clearRouteVisuals();
+  // Limpiar visuales anteriores
+  clearRouteVisuals(); // Quitar líneas de ruta
+  clearUserMarkers(); // Quitar marcadores de usuarios
   
+  // Si no hay ruta seleccionada
   if (!rid) {
     statusEl.textContent = "Selecciona una ruta para operar.";
+    
+    // 🔥 DETENER listeners de Firebase
+    operatorVisibilityListeners.forEach(unsub => unsub());
+    operatorVisibilityListeners = [];
     return;
   }
   
   const routeName = ROUTES.find(r => r.id === rid)?.name || rid;
   statusEl.textContent = `Ruta seleccionada: ${routeName}`;
   
-  // ESTO ES LO NUEVO: Guardar la ruta en Firebase
+  // 🔥 GUARDAR ruta en Firebase
   if (state.sessionDocId) {
     try {
       await updateDoc(doc(db, "conductores", state.sessionDocId), {
-        routeId: rid,
+        routeId: rid, // Campo que lee el usuario
         lastUpdate: serverTimestamp()
       });
+      
+      console.log('✅ Ruta guardada en Firebase');
       
       // Actualizar sesión local
       if (state.session) {
@@ -1245,12 +1345,19 @@ routeSelectOp?.addEventListener("change", async e => {
       }
       
     } catch (error) {
-      console.error('Error actualizando ruta:', error);
+      console.error('❌ Error actualizando ruta:', error);
     }
   }
   
+  // Dibujar la ruta en el mapa
   if (rid) {
     await drawSelectedRoute(rid, true);
+  }
+  
+  // 🔥 Si el operador YA está ACTIVO, iniciar escucha de usuarios
+  const docSnap = await getDoc(doc(db, "conductores", state.sessionDocId));
+  if (docSnap.exists() && docSnap.data().disponible) {
+    listenToActiveUsers(); // Escuchar usuarios en esta ruta
   }
   
   updateETAUI();
@@ -1347,37 +1454,72 @@ cancelRequestBtn.addEventListener("click", () => {
   state.activeOpMarkers.delete(rid);
 });
 
-/* Logout */
+/* Logout - Limpiar TODA la sesión y listeners */
 logoutBtn.addEventListener("click", () => {
-  // clear session and forms
+  console.log('═══════════════════════════════════════');
+  console.log('👋 CERRANDO SESIÓN');
+  console.log('═══════════════════════════════════════');
+  
+  // 🔥 Limpiar TODOS los listeners de Firebase
+  // Esto es CRÍTICO para evitar fugas de memoria
+  state.unsubscribers.forEach(unsub => {
+    try {
+      unsub(); // Detener listener
+    } catch (error) {
+      console.error('Error limpiando listener:', error);
+    }
+  });
+  state.unsubscribers = []; // Vaciar array
+  
+  operatorVisibilityListeners.forEach(unsub => {
+    try {
+      unsub(); // Detener listener
+    } catch (error) {
+      console.error('Error limpiando listener:', error);
+    }
+  });
+  operatorVisibilityListeners = []; // Vaciar array
+  
+  console.log('✅ Listeners limpiados');
+  
+  // Limpiar sesión y formularios
   localStorage.removeItem("session");
   authView.hidden = false;
   mapView.hidden = true;
-  operatorMapView.hidden = true; // ocultar interfaz del operador
+  operatorMapView.hidden = true;
   chatView.hidden = true;
   logoutBtn.hidden = true;
   driverPanel.hidden = true;
   userForm.reset();
   driverForm.reset();
   statusEl.textContent = "";
-  if (watchId) navigator.geolocation.clearWatch(watchId);
-  stopUserPosPolling(); // limpiar vista de operador
+  
+  // Detener seguimiento GPS
+  if (watchId) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+  
+  stopUserPosPolling();
   stopRequestPollingOperator();
-  // limpiar marcadores de operadores mostrados al usuario
+  
+  // Limpiar marcadores del mapa
   state.activeOpMarkers.forEach(arr=> arr.forEach(m=> state.map?.removeLayer(m)));
   state.activeOpMarkers.clear();
-  if (state.map) { state.map.remove(); state.map = null; } // destruir mapa activo
-  // note: keep operators and requests to simulate ongoing system
-  userRegView.hidden = true; driverRegView.hidden = true; authView.hidden = false;
-  // cancelar solicitudes del usuario al cerrar sesión
-  try {
-    const rr = getRouteRequests();
-    const email = state.session?.email;
-    Object.keys(rr).forEach(rid=>{
-      rr[rid] = (rr[rid]||[]).filter(x=>x.email!==email);
-    });
-    setRouteRequests(rr);
-  } catch {}
+  clearUserMarkers();
+  
+  // Destruir instancia del mapa
+  if (state.map) { 
+    state.map.remove(); 
+    state.map = null; 
+  }
+  
+  userRegView.hidden = true; 
+  driverRegView.hidden = true; 
+  authView.hidden = false;
+  
+  console.log('✅Sesión cerrada correctamente');
+  console.log('═══════════════════════════════════════');
 });
 
 /* Accessibility: focus management */
@@ -1756,15 +1898,19 @@ if (driverPanel) {
     }
   });
   
-  // Botón de cambiar estado (ACTIVO/INACTIVO)
+// 🔘 OPERADOR: Botón para cambiar estado ACTIVO/INACTIVO
   toggleActiveBtn?.addEventListener("click", async () => {
+    console.log('═══════════════════════════════════════');
+    console.log('🔘 Botón de estado presionado');
+    console.log('═══════════════════════════════════════');
+    
     if (!state.sessionDocId) {
       alert('Error: No se puede cambiar estado sin sesión activa.');
       return;
     }
     
     try {
-      // Obtener datos actuales del operador desde Firebase
+      // 🔥 OBTENER datos actuales del operador desde Firebase
       const docSnap = await getDoc(doc(db, "conductores", state.sessionDocId));
       
       if (!docSnap.exists()) {
@@ -1773,10 +1919,13 @@ if (driverPanel) {
       }
       
       const operatorData = docSnap.data();
-      const currentStatus = operatorData.disponible || false;
-      const routeId = operatorData.routeId;
+      const currentStatus = operatorData.disponible || false; // Estado actual
+      const routeId = operatorData.routeId; // Ruta asignada
       
-      // VALIDACIÓN 1: Debe tener ruta asignada para activarse
+      console.log('📊 Estado actual:', currentStatus ? 'ACTIVO' : 'INACTIVO');
+      console.log('📍 Ruta:', routeId);
+      
+      // ✅ VALIDACIÓN 1: Debe tener ruta asignada para activarse
       if (!currentStatus && !routeId) {
         alert(
           '⚠️ Selecciona una Ruta Primero\n\n' +
@@ -1786,6 +1935,7 @@ if (driverPanel) {
           'Esto permite que los usuarios te vean en la ruta correcta.'
         );
         
+        // Resaltar el selector de ruta
         if (routeSelectOp) {
           routeSelectOp.style.border = '3px solid #ff5722';
           routeSelectOp.focus();
@@ -1794,7 +1944,7 @@ if (driverPanel) {
         return;
       }
       
-      // VALIDACIÓN 2: Debe tener ubicación para activarse
+      // ✅ VALIDACIÓN 2: Debe tener ubicación GPS para activarse
       if (!currentStatus && (!operatorData.lat || !operatorData.lng)) {
         alert(
           '⚠️ Ubicación Requerida\n\n' +
@@ -1808,22 +1958,27 @@ if (driverPanel) {
         return;
       }
       
-      // Cambiar el estado
+      // 🔄 Cambiar el estado (de activo a inactivo o viceversa)
       const newStatus = !currentStatus;
       
-      // Actualizar en Firebase
+      console.log('🔄 Cambiando estado a:', newStatus ? 'ACTIVO' : 'INACTIVO');
+      
+      // 🔥 ACTUALIZAR estado en Firebase
       await updateDoc(doc(db, "conductores", state.sessionDocId), {
-        disponible: newStatus,
+        disponible: newStatus, // Campo que leen los usuarios
         lastUpdate: serverTimestamp()
       });
       
-      // Actualizar UI
+      console.log('✅ Estado actualizado en Firebase');
+      
+      // Actualizar texto en el panel
       driverOnlineStatus.textContent = newStatus ? "Activo" : "Inactivo";
       
       // Actualizar marcador en el mapa
       if (newStatus) {
-        // ACTIVADO
+        // ✅ ACTIVADO
         if (operatorData.lat && operatorData.lng) {
+          // Crear/actualizar marcador de la combi
           if (!state.driverMarker) {
             state.driverMarker = L.marker([operatorData.lat, operatorData.lng], { icon: combiIcon })
               .addTo(state.map)
@@ -1831,29 +1986,44 @@ if (driverPanel) {
           }
         }
         
+        // 🔥 INICIAR escucha de usuarios en mi ruta
+        listenToActiveUsers();
+        
         const routeName = ROUTES.find(r => r.id === routeId)?.name || routeId;
         alert(
           `✅ Operador Activado\n\n` +
           `Estás ACTIVO en:\n${routeName}\n\n` +
           `Los usuarios de esta ruta ahora pueden verte.`
         );
+        
+        console.log('🎯 Escucha de usuarios ACTIVADA');
+        
       } else {
-        // DESACTIVADO
+        // ❌ DESACTIVADO
+        // Quitar marcador del mapa
         if (state.driverMarker) {
           state.map.removeLayer(state.driverMarker);
           state.driverMarker = null;
         }
         
+        // 🔥 DETENER escucha de usuarios
+        operatorVisibilityListeners.forEach(unsub => unsub());
+        operatorVisibilityListeners = [];
+        clearUserMarkers(); // Quitar marcadores de usuarios
+        
         alert(
           `⚪ Operador Desactivado\n\n` +
           `Ya NO eres visible para los usuarios.`
         );
+        
+        console.log('🛑 Escucha de usuarios DETENIDA');
       }
       
       updateETAUI();
+      console.log('═══════════════════════════════════════');
       
     } catch (error) {
-      console.error('Error al cambiar estado:', error);
+      console.error('❌ Error al cambiar estado:', error);
       alert('Error al cambiar estado. Intenta de nuevo.');
     }
   });
@@ -2233,51 +2403,72 @@ function openOperatorDetail(opId){
   operatorDetailView.hidden = false;
 }
 
-backFromOperatorDetail.addEventListener("click", ()=>{
-  operatorDetailView.hidden = true;
-  (state.role==="driver"?operatorMapView:mapView).hidden = false;
-
-
-  // ============================================
-// CAMBIO 5: AGREGAR ESTAS 3 FUNCIONES AL FINAL
+// ============================================
+// 🔥 SISTEMA BIDIRECCIONAL USUARIO-OPERADOR
+// Sistema que permite que usuarios y operadores se vean mutuamente
+// cuando están en la misma ruta
 // ============================================
 
-// Función 1: Escuchar operadores activos de la ruta seleccionada
+/**
+ * 👤 FUNCIÓN PARA USUARIOS: Escuchar operadores activos
+ * 
+ * Esta función se ejecuta cuando:
+ * - El usuario selecciona una ruta en el menú desplegable
+ * - Crea un "listener" en tiempo real de Firebase
+ * - Detecta todos los operadores ACTIVOS en esa ruta
+ * - Muestra sus marcadores en el mapa
+ */
 function listenToActiveOperators() {
+  // Solo funciona si el rol es "user"
   if (state.role !== "user") return;
   
-  console.log('👁️ Escuchando operadores activos...');
+  console.log('═══════════════════════════════════════');
+  console.log('👤 USUARIO: Escuchando operadores...');
+  console.log('═══════════════════════════════════════');
   
-  // Limpiar listeners anteriores
+  // Limpiar listeners anteriores para evitar duplicados
   operatorVisibilityListeners.forEach(unsub => unsub());
   operatorVisibilityListeners = [];
   
+  // Si no hay ruta seleccionada, limpiar todo
   if (!state.selectedRouteId) {
-    console.log('⚠️ No hay ruta seleccionada');
-    state.operators = {};
-    clearOperatorMarkers();
+    console.log('⚠️ Usuario sin ruta seleccionada');
+    state.operators = {}; // Vaciar lista de operadores
+    clearOperatorMarkers(); // Quitar marcadores del mapa
     return;
   }
   
-  console.log('📍 Ruta:', state.selectedRouteId);
+  console.log('🔍 Escuchando ruta:', state.selectedRouteId);
   
-  // Escuchar en Firebase: conductores de esta ruta que estén disponibles
+  // 🔥 QUERY DE FIREBASE: Buscar conductores que cumplan:
+  // 1. Tienen la misma ruta (routeId)
+  // 2. Están disponibles (disponible = true)
   const q = query(
     collection(db, "conductores"),
     where("routeId", "==", state.selectedRouteId),
     where("disponible", "==", true)
   );
   
+  // onSnapshot = escucha en TIEMPO REAL (se ejecuta cada vez que hay cambios)
   const unsubscribe = onSnapshot(q, (snapshot) => {
-    console.log('🔄 Operadores encontrados:', snapshot.size);
+    console.log('📡 Operadores activos detectados:', snapshot.size);
     
+    // Limpiar lista anterior
     state.operators[state.selectedRouteId] = [];
     
+    // Recorrer cada documento encontrado
     snapshot.docs.forEach(doc => {
-      const op = doc.data();
+      const op = doc.data(); // Datos del operador
       
-      if (!op.lat || !op.lng) return;
+      // Solo mostrar operadores con ubicación GPS
+      if (!op.lat || !op.lng) {
+        console.log('⚠️ Operador sin ubicación:', op.unit);
+        return; // Saltar este operador
+      }
       
+      console.log(`✅ Operador ${op.unit} (${op.plate}) - Lat: ${op.lat}, Lng: ${op.lng}`);
+      
+      // Agregar operador a la lista
       state.operators[state.selectedRouteId].push({
         id: op.id,
         name: op.name,
@@ -2290,59 +2481,198 @@ function listenToActiveOperators() {
       });
     });
     
+    // Actualizar marcadores en el mapa
     updateOperatorMarkersOnMap();
+    // Actualizar tiempo estimado de llegada
     updateETAUI();
+    
+    console.log('═══════════════════════════════════════');
   });
   
+  // Guardar el "unsubscribe" para poder detener el listener después
   operatorVisibilityListeners.push(unsubscribe);
   state.unsubscribers.push(unsubscribe);
 }
 
-// Función 2: Actualizar marcadores de operadores en el mapa
-function updateOperatorMarkersOnMap() {
-  console.log('🗺️ Actualizando marcadores...');
+/**
+ * 🚌 FUNCIÓN PARA OPERADORES: Escuchar usuarios en mi ruta
+ * 
+ * Esta función se ejecuta cuando:
+ * - El operador activa su estado a "Activo"
+ * - Crea un "listener" en tiempo real de Firebase
+ * - Detecta todos los usuarios que seleccionaron su ruta
+ * - Muestra sus marcadores en el mapa
+ */
+function listenToActiveUsers() {
+  // Solo funciona si el rol es "driver"
+  if (state.role !== "driver") return;
   
+  console.log('═══════════════════════════════════════');
+  console.log('🚌 OPERADOR: Escuchando usuarios...');
+  console.log('═══════════════════════════════════════');
+  
+  // Limpiar listeners anteriores
+  operatorVisibilityListeners.forEach(unsub => unsub());
+  operatorVisibilityListeners = [];
+  
+  // Limpiar marcadores de usuarios del mapa
+  clearUserMarkers();
+  
+  // Obtener la ruta del operador
+  const myRouteId = state.selectedRouteId || state.session?.routeId;
+  
+  if (!myRouteId) {
+    console.log('⚠️ Operador sin ruta asignada');
+    return;
+  }
+  
+  console.log('🔍 Escuchando usuarios en ruta:', myRouteId);
+  
+  // 🔥 QUERY DE FIREBASE: Buscar usuarios que tienen esta ruta como preferida
+  const q = query(
+    collection(db, "usuarios"),
+    where("preferredRouteId", "==", myRouteId)
+  );
+  
+  // Escucha en tiempo real
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    console.log('📡 Usuarios detectados:', snapshot.size);
+    
+    // Limpiar marcadores anteriores
+    clearUserMarkers();
+    
+    // Recorrer cada usuario encontrado
+    snapshot.docs.forEach(doc => {
+      const user = doc.data(); // Datos del usuario
+      
+      // Solo mostrar usuarios con ubicación GPS
+      if (!user.lat || !user.lng) {
+        console.log('⚠️ Usuario sin ubicación:', user.name);
+        return; // Saltar este usuario
+      }
+      
+      console.log(`✅ Usuario ${user.name} - Lat: ${user.lat}, Lng: ${user.lng}`);
+      
+      // Crear marcador de usuario en el mapa
+      const marker = L.marker([user.lat, user.lng], { icon: personIcon })
+        .addTo(state.map)
+        .bindPopup(`
+          <div style="text-align: center;">
+            <strong>👤 ${user.name}</strong><br>
+            <small>Ruta: ${ROUTES.find(r => r.id === myRouteId)?.name}</small>
+          </div>
+        `);
+      
+      // Guardar marcador en la lista
+      if (!state.requestLayers.has(myRouteId)) {
+        state.requestLayers.set(myRouteId, []); // Crear array si no existe
+      }
+      state.requestLayers.get(myRouteId).push(marker);
+    });
+    
+    // Actualizar contador de usuarios en el panel
+    const userCount = state.requestLayers.get(myRouteId)?.length || 0;
+    if (requestCount) {
+      requestCount.textContent = String(userCount);
+    }
+    
+    console.log(`📊 Total usuarios visibles: ${userCount}`);
+    console.log('═══════════════════════════════════════');
+  });
+  
+  // Guardar unsubscribe
+  operatorVisibilityListeners.push(unsubscribe);
+  state.unsubscribers.push(unsubscribe);
+}
+
+/**
+ * 🗺️ Actualizar marcadores de OPERADORES en el mapa (vista de usuario)
+ * 
+ * Toma la lista de operadores detectados y los muestra como marcadores 🚌
+ */
+function updateOperatorMarkersOnMap() {
+  console.log('🗺️ Actualizando marcadores de operadores...');
+  
+  // Primero, limpiar todos los marcadores anteriores
   clearOperatorMarkers();
   
   const routeId = state.selectedRouteId;
-  if (!routeId) return;
+  if (!routeId) return; // No hay ruta seleccionada
   
+  // Obtener lista de operadores de esta ruta
   const operators = state.operators[routeId] || [];
+  
+  console.log(`📍 Mostrando ${operators.length} operador(es)`);
   
   if (operators.length === 0) {
     if (statusEl) statusEl.textContent = "No hay unidades activas en esta ruta.";
     return;
   }
   
+  // Crear un marcador por cada operador
   const markers = operators.map((op) => {
-    return L.marker([op.lat, op.lng], { icon: combiIcon })
-      .addTo(state.map)
-      .bindPopup(`
+    const marker = L.marker([op.lat, op.lng], { icon: combiIcon }) // Icono de combi 🚌
+      .addTo(state.map) // Agregar al mapa
+      .bindPopup(` 
         <div style="text-align: center;">
           <strong>🚌 Unidad ${op.unit}</strong><br>
           <small>Placa: ${op.plate}</small><br>
-          <small>Asientos: ${op.seats}</small>
+          <small>Asientos: ${op.seats}</small><br>
+          <small>Operador: ${op.name}</small>
         </div>
       `);
+    
+    console.log(`✅ Marcador creado: ${op.unit} en [${op.lat}, ${op.lng}]`);
+    return marker;
   });
   
+  // Guardar marcadores en el estado
   state.activeOpMarkers.set(routeId, markers);
   
+  // Actualizar mensaje de estado
   if (statusEl) {
-    statusEl.textContent = `${operators.length} unidad(es) activa(s) en esta ruta.`;
+    statusEl.textContent = `✅ ${operators.length} unidad(es) activa(s) en esta ruta.`;
   }
 }
 
-// Función 3: Limpiar marcadores de operadores del mapa
+/**
+ * 🧹 Limpiar marcadores de OPERADORES del mapa
+ * 
+ * Remueve todos los marcadores de operadores (🚌) del mapa
+ */
 function clearOperatorMarkers() {
+  console.log('🧹 Limpiando marcadores de operadores...');
+  
+  // Recorrer todos los marcadores guardados
   state.activeOpMarkers.forEach((markers) => {
     markers.forEach(marker => {
-      if (state.map) state.map.removeLayer(marker);
+      if (state.map) state.map.removeLayer(marker); // Quitar del mapa
     });
   });
   
+  // Vaciar el Map
   state.activeOpMarkers.clear();
 }
 
-
-});
+/**
+ * 🧹 Limpiar marcadores de USUARIOS del mapa
+ * 
+ * Remueve todos los marcadores de usuarios (👤) del mapa
+ */
+function clearUserMarkers() {
+  console.log('🧹 Limpiando marcadores de usuarios...');
+  
+  const myRouteId = state.selectedRouteId || state.session?.routeId;
+  if (!myRouteId) return;
+  
+  // Obtener marcadores de esta ruta
+  const markers = state.requestLayers.get(myRouteId) || [];
+  markers.forEach(marker => {
+    if (state.map) state.map.removeLayer(marker); // Quitar del mapa
+  });
+  
+  // Eliminar entrada del Map
+  state.requestLayers.delete(myRouteId);
+  // CAMBIO 2: Reemplazar routeSelect.addEventListener
+  /* Logout */
+}
