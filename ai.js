@@ -355,7 +355,7 @@ function detectIntent(query, context) {
 
 function respondDriverUserCount(ctx) {
   if (!ctx.hasRoute) {
-    return `📋 **No puedo mostrarte usuarios aún**\n\n` +
+    return ` **No puedo mostrarte usuarios aún**\n\n` +
       `❌ Aún no has seleccionado tu ruta de operación.\n\n` +
       `**Pasos para ver usuarios:**\n` +
       `1️⃣ Selecciona tu ruta en el menú desplegable\n` +
@@ -368,43 +368,43 @@ function respondDriverUserCount(ctx) {
     return `⚠️ **Tu estado está INACTIVO**\n\n` +
       `No puedes ver usuarios porque no estás activo.\n\n` +
       `**Para activarte:**\n` +
-      `🔘 Presiona el botón "Cambiar Estado"\n` +
-      `✅ Tu estado cambiará a "Activo"\n\n` +
+      ` Presiona el botón "Cambiar Estado"\n` +
+      ` Tu estado cambiará a "Activo"\n\n` +
       `Una vez activo, los usuarios que soliciten "${ctx.routeName}" aparecerán en tu mapa con marcadores 👤`;
   }
   
   if (ctx.userCount === 0) {
-    return `📊 **Usuarios en "${ctx.routeName}"**\n\n` +
-      `👥 Actualmente: **0 usuarios**\n\n` +
-      `✅ Estás activo y visible para usuarios\n` +
-      `📍 Cuando un usuario solicite esta ruta, aparecerá automáticamente en tu mapa\n\n` +
-      `💡 **Recuerda:**\n` +
-      `• Los usuarios te ven en el mapa 🗺️\n` +
+    return ` **Usuarios en "${ctx.routeName}"**\n\n` +
+      ` Actualmente: **0 usuarios**\n\n` +
+      ` Estás activo y visible para usuarios\n` +
+      ` Cuando un usuario solicite esta ruta, aparecerá automáticamente en tu mapa\n\n` +
+      ` **Recuerda:**\n` +
+      `• Los usuarios te ven en el mapa \n` +
       `• Tu ubicación se actualiza en tiempo real\n` +
       `• Asientos disponibles: ${ctx.seats}`;
   }
   
-  return `📊 **Usuarios activos en "${ctx.routeName}"**\n\n` +
-    `👥 **Total: ${ctx.userCount} usuario(s)**\n\n` +
-    `📍 Los ves en el mapa como marcadores azules 👤\n\n` +
+  return ` **Usuarios activos en "${ctx.routeName}"**\n\n` +
+    ` **Total: ${ctx.userCount} usuario(s)**\n\n` +
+    ` Los ves en el mapa como marcadores azules 👤\n\n` +
     `**Haz clic en un marcador para ver:**\n` +
     `• Nombre del usuario\n` +
     `• Su ubicación exacta\n` +
     `• Hace cuánto solicitó\n\n` +
-    `💺 Asientos disponibles: **${ctx.seats}**\n` +
-    `🚌 Tu unidad está visible para todos ellos`;
+    ` Asientos disponibles: **${ctx.seats}**\n` +
+    ` Tu unidad está visible para todos ellos`;
 }
 
 function respondDriverSeats(ctx) {
-  return `💺 **Gestión de Asientos**\n\n` +
-    `📊 **Capacidad actual: ${ctx.seats} asientos**\n\n` +
+  return ` **Gestión de Asientos**\n\n` +
+    ` **Capacidad actual: ${ctx.seats} asientos**\n\n` +
     `**Para actualizar:**\n\n` +
     `1️⃣ Busca el botón **"Actualizar Asientos"** en tu panel superior\n` +
     `2️⃣ Haz clic en él\n` +
     `3️⃣ Ingresa el número de asientos disponibles (0-15)\n` +
     `4️⃣ Confirma el cambio\n\n` +
-    `✅ Los usuarios verán tu capacidad actualizada en tiempo real\n\n` +
-    `💡 **Tip:** Actualiza tus asientos cada vez que suban o bajen pasajeros para dar un mejor servicio`;
+    ` Los usuarios verán tu capacidad actualizada en tiempo real\n\n` +
+    ` **Tip:** Actualiza tus asientos cada vez que suban o bajen pasajeros para dar un mejor servicio`;
 }
 
 function respondDriverActivation(ctx) {
@@ -419,76 +419,76 @@ function respondDriverActivation(ctx) {
   }
   
   if (ctx.isDriverActive) {
-    return `✅ **Ya estás ACTIVO**\n\n` +
-      `📊 **Estado actual:**\n` +
-      `• Estado: ACTIVO ✅\n` +
+    return ` **Ya estás ACTIVO**\n\n` +
+      ` **Estado actual:**\n` +
+      `• Estado: ACTIVO \n` +
       `• Ruta: "${ctx.routeName}"\n` +
       `• Usuarios en ruta: ${ctx.userCount}\n` +
       `• Asientos: ${ctx.seats}\n\n` +
-      `🗺️ Los usuarios te ven en el mapa como un marcador verde 🚌\n\n` +
+      ` Los usuarios te ven en el mapa como un marcador verde \n\n` +
       `**Para desactivarte:**\n` +
       `Presiona el botón "Cambiar Estado" nuevamente`;
   }
   
-  return `🔘 **Instrucciones para activarte**\n\n` +
+  return ` **Instrucciones para activarte**\n\n` +
     `Tu ruta ya está seleccionada: "${ctx.routeName}"\n\n` +
     `**Pasos:**\n` +
     `1️⃣ Asegúrate de tener GPS activo\n` +
     `2️⃣ Presiona el botón **"Cambiar Estado"**\n` +
-    `3️⃣ Tu estado cambiará a "Activo" ✅\n\n` +
+    `3️⃣ Tu estado cambiará a "Activo" \n\n` +
     `**Una vez activo:**\n` +
-    `🗺️ Aparecerás en el mapa de usuarios\n` +
-    `👤 Verás usuarios solicitando tu ruta\n` +
-    `📍 Tu ubicación se actualizará automáticamente`;
+    ` Aparecerás en el mapa de usuarios\n` +
+    ` Verás usuarios solicitando tu ruta\n` +
+    ` Tu ubicación se actualizará automáticamente`;
 }
 
 function respondDriverRouteTime(ctx) {
   if (!ctx.hasRoute) {
-    return `⏱️ **Para calcular el tiempo:**\n\n` +
+    return `⏱ **Para calcular el tiempo:**\n\n` +
       `Primero selecciona tu ruta en el menú.\n\n` +
       `Una vez seleccionada, te mostraré el tiempo completo del recorrido.`;
   }
   
   if (!ctx.routeData) {
-    return `⏳ Cargando datos de "${ctx.routeName}"...\n\nIntenta de nuevo en un momento.`;
+    return ` Cargando datos de "${ctx.routeName}"...\n\nIntenta de nuevo en un momento.`;
   }
   
   const withTraffic = Math.round(ctx.routeData.time * 1.3);
   
-  return `⏱️ **Tiempo de "${ctx.routeName}"**\n\n` +
-    `🕐 **Tiempo normal: ~${ctx.routeData.time} minutos**\n` +
-    `🚦 Con tráfico: ~${withTraffic} minutos\n` +
-    `📏 Distancia total: ${ctx.routeData.distance} km\n\n` +
+  return `⏱ **Tiempo de "${ctx.routeName}"**\n\n` +
+    ` **Tiempo normal: ~${ctx.routeData.time} minutos**\n` +
+    ` Con tráfico: ~${withTraffic} minutos\n` +
+    ` Distancia total: ${ctx.routeData.distance} km\n\n` +
     `**Desglose aproximado:**\n` +
     `• Sin paradas: ${Math.round(ctx.routeData.time * 0.8)} min\n` +
     `• Con paradas normales: ${ctx.routeData.time} min\n` +
     `• En hora pico: ${withTraffic} min\n\n` +
-    `💡 Estos tiempos son estimados según condiciones normales`;
+    ` Estos tiempos son estimados según condiciones normales`;
 }
 
 function respondDriverTraffic(ctx, query) {
   const location = extractLocation(query);
   
-  let response = `🚦 **Sugerencias de Tráfico**\n\n`;
+  let response = ` **Sugerencias de Tráfico**\n\n`;
   
   if (location) {
-    response += `📍 Zona consultada: **${location}**\n\n`;
+    response += ` Zona consultada: **${location}**\n\n`;
   }
   
   response += 
-    `💡 **Recomendaciones generales:**\n\n` +
-    `🕐 **Horas pico** (7-9am, 2-3pm, 6-8pm)\n` +
+    ` **Recomendaciones generales:**\n\n` +
+    ` **Horas pico** (7-9am, 2-3pm, 6-8pm)\n` +
     `   Mayor congestión en vías principales\n\n` +
-    `🌧️ **Clima**\n` +
+    ` **Clima**\n` +
     `   La lluvia aumenta 30% el tiempo\n\n` +
-    `🚧 **Rutas alternas**\n` +
+    ` **Rutas alternas**\n` +
     `   Considera vías secundarias en hora pico\n\n`;
   
   if (ctx.hasRoute) {
     response += `📍 Tu ruta actual: "${ctx.routeName}"\n`;
     if (ctx.routeData) {
-      response += `⏱️ Tiempo normal: ${ctx.routeData.time} min\n`;
-      response += `🚦 Con tráfico: ~${Math.round(ctx.routeData.time * 1.3)} min`;
+      response += ` Tiempo normal: ${ctx.routeData.time} min\n`;
+      response += ` Con tráfico: ~${Math.round(ctx.routeData.time * 1.3)} min`;
     }
   }
   
@@ -502,15 +502,15 @@ function respondUserCost(ctx, query) {
     if (dest) {
       const route = findRouteByDestination(dest, ctx.allRoutes);
       if (route) {
-        return `📍 **Para llegar a ${dest}:**\n\n` +
+        return ` **Para llegar a ${dest}:**\n\n` +
           `Te recomiendo: "${route.name}"\n\n` +
           `**Siguiente paso:**\n` +
           `Selecciónala en el menú y te calcularé el costo exacto.`;
       }
     }
     
-    return `💰 **Sistema de Tarifas de Movia TI**\n\n` +
-      `📊 Cálculo:\n` +
+    return ` **Sistema de Tarifas de Movia TI**\n\n` +
+      ` Cálculo:\n` +
       `• Tarifa base: $10 MXN\n` +
       `• Por cada kilómetro: $1 MXN\n\n` +
       `**Para calcular tu viaje:**\n` +
@@ -520,36 +520,36 @@ function respondUserCost(ctx, query) {
   }
   
   if (!ctx.routeData) {
-    return `⏳ Cargando información de ruta...\nIntenta en un momento.`;
+    return ` Cargando información de ruta...\nIntenta en un momento.`;
   }
   
-  return `💰 **Costo de "${ctx.routeName}"**\n\n` +
-    `📏 Distancia: **${ctx.routeData.distance} km**\n` +
-    `💵 Tarifa base: $10 MXN\n` +
-    `📊 Por distancia: $${(parseFloat(ctx.routeData.distance)).toFixed(0)} MXN\n` +
-    `━━━━━━━━━━━━━━━━━━\n` +
-    `💳 **TOTAL: $${ctx.routeData.cost} MXN**\n\n` +
-    `✅ Pago en efectivo al operador\n` +
-    `🚌 Unidades disponibles: ${ctx.operatorCount}`;
+  return ` **Costo de "${ctx.routeName}"**\n\n` +
+    ` Distancia: **${ctx.routeData.distance} km**\n` +
+    ` Tarifa base: $10 MXN\n` +
+    ` Por distancia: $${(parseFloat(ctx.routeData.distance)).toFixed(0)} MXN\n` +
+    `\n` +
+    ` **TOTAL: $${ctx.routeData.cost} MXN**\n\n` +
+    ` Pago en efectivo al operador\n` +
+    ` Unidades disponibles: ${ctx.operatorCount}`;
 }
 
 function respondUserTime(ctx, query) {
   if (!ctx.hasRoute || !ctx.routeData) {
-    return `⏱️ **Para calcular el tiempo:**\n\n` +
+    return ` **Para calcular el tiempo:**\n\n` +
       `Primero selecciona tu ruta de destino.\n\n` +
       `¿A dónde te diriges?`;
   }
   
-  return `⏱️ **Tiempo de "${ctx.routeName}"**\n\n` +
-    `🕐 Duración: **~${ctx.routeData.time} minutos**\n` +
-    `📏 Distancia: **${ctx.routeData.distance} km**\n\n` +
-    `🚌 Unidades disponibles: **${ctx.operatorCount}**\n\n` +
-    `✅ En condiciones normales de tráfico`;
+  return ` **Tiempo de "${ctx.routeName}"**\n\n` +
+    ` Duración: **~${ctx.routeData.time} minutos**\n` +
+    ` Distancia: **${ctx.routeData.distance} km**\n\n` +
+    ` Unidades disponibles: **${ctx.operatorCount}**\n\n` +
+    ` En condiciones normales de tráfico`;
 }
 
 function respondUserOperators(ctx) {
   if (!ctx.hasRoute) {
-    return `🚌 **Para ver unidades disponibles:**\n\n` +
+    return ` **Para ver unidades disponibles:**\n\n` +
       `1️⃣ Selecciona tu ruta de destino\n` +
       `2️⃣ Verás los operadores activos en el mapa\n\n` +
       `¿A dónde vas?`;
@@ -564,21 +564,21 @@ function respondUserOperators(ctx) {
       `• Considera otra ruta cercana`;
   }
   
-  return `🚌 **Unidades en "${ctx.routeName}"**\n\n` +
-    `✅ **Operadores activos: ${ctx.operatorCount}**\n\n` +
-    `📍 Los ves en el mapa con marcadores verdes 🚌\n\n` +
+  return ` **Unidades en "${ctx.routeName}"**\n\n` +
+    ` **Operadores activos: ${ctx.operatorCount}**\n\n` +
+    ` Los ves en el mapa con marcadores verdes \n\n` +
     `**Haz clic en un marcador para ver:**\n` +
     `• Número de unidad\n` +
     `• Placa del vehículo\n` +
     `• Asientos disponibles\n\n` +
-    `🎯 Presiona "Solicitar Unidad" cuando estés listo`;
+    ` Presiona "Solicitar Unidad" cuando estés listo`;
 }
 
 function respondUserRouteSuggestion(ctx, query) {
   const dest = extractDestination(query);
   
   if (!dest) {
-    return `🗺️ **¿A dónde necesitas ir?**\n\n` +
+    return ` **¿A dónde necesitas ir?**\n\n` +
       `Puedo sugerirte rutas hacia:\n\n` +
       `• Suburbano\n` +
       `• Dorado\n` +
@@ -591,22 +591,22 @@ function respondUserRouteSuggestion(ctx, query) {
   const route = findRouteByDestination(dest, ctx.allRoutes);
   
   if (!route) {
-    return `❌ No encontré rutas directas a "${dest}".\n\n` +
+    return ` No encontré rutas directas a "${dest}".\n\n` +
       `¿Podrías ser más específico con el destino?`;
   }
   
-  return `✅ **Te recomiendo: "${route.name}"**\n\n` +
-    `📍 Esta ruta pasa por ${dest}\n\n` +
+  return ` **Te recomiendo: "${route.name}"**\n\n` +
+    ` Esta ruta pasa por ${dest}\n\n` +
     `**Siguiente paso:**\n` +
     `Selecciónala en el menú para ver:\n` +
-    `• 🚌 Operadores disponibles\n` +
-    `• 💰 Costo del viaje\n` +
-    `• ⏱️ Tiempo estimado`;
+    `•  Operadores disponibles\n` +
+    `•  Costo del viaje\n` +
+    `•  Tiempo estimado`;
 }
 
 function respondUserRequest(ctx) {
   if (!ctx.hasRoute) {
-    return `📍 **Para solicitar una unidad:**\n\n` +
+    return ` **Para solicitar una unidad:**\n\n` +
       `1️⃣ Selecciona tu ruta de destino en el menú\n` +
       `2️⃣ Presiona el botón "Solicitar Unidad"\n` +
       `3️⃣ Los operadores te verán en su mapa\n\n` +
@@ -621,18 +621,18 @@ function respondUserRequest(ctx) {
       `• Revisar otra ruta cercana`;
   }
   
-  return `✅ **Listo para solicitar en "${ctx.routeName}"**\n\n` +
-    `🚌 Unidades disponibles: **${ctx.operatorCount}**\n\n` +
+  return ` **Listo para solicitar en "${ctx.routeName}"**\n\n` +
+    ` Unidades disponibles: **${ctx.operatorCount}**\n\n` +
     `**Presiona "Solicitar Unidad" para:**\n` +
     `✓ Aparecer en el mapa de operadores\n` +
     `✓ Mostrar tu ubicación exacta\n` +
     `✓ Que puedan llegar a recogerte\n\n` +
-    `📍 Asegúrate de tener GPS activo`;
+    ` Asegúrate de tener GPS activo`;
 }
 
 function respondGreeting(ctx) {
   const greetings = [
-    `¡Hola ${ctx.userName}! 👋`,
+    `¡Hola ${ctx.userName}! `,
     `¡Qué gusto verte, ${ctx.userName}!`,
     `¡Hola! Soy tu asistente de Movia TI 🚌`
   ];
@@ -641,68 +641,68 @@ function respondGreeting(ctx) {
   
   if (ctx.role === "driver") {
     if (!ctx.hasRoute) {
-      return `${greeting}\n\n📋 Para empezar, selecciona tu ruta de operación en el menú.\n\n💡 Una vez seleccionada, podrás activarte y ver usuarios.`;
+      return `${greeting}\n\n Para empezar, selecciona tu ruta de operación en el menú.\n\n💡 Una vez seleccionada, podrás activarte y ver usuarios.`;
     }
     if (!ctx.isDriverActive) {
-      return `${greeting}\n\n📍 Ruta seleccionada: "${ctx.routeName}"\n\n🔘 ¿Listo para activarte y empezar a operar?`;
+      return `${greeting}\n\n Ruta seleccionada: "${ctx.routeName}"\n\n ¿Listo para activarte y empezar a operar?`;
     }
-    return `${greeting}\n\n✅ **Estás activo en "${ctx.routeName}"**\n👥 Usuarios: ${ctx.userCount}\n💺 Asientos: ${ctx.seats}`;
+    return `${greeting}\n\n **Estás activo en "${ctx.routeName}"**\n Usuarios: ${ctx.userCount}\n Asientos: ${ctx.seats}`;
   } else {
     if (!ctx.hasRoute) {
-      return `${greeting}\n\n¿A dónde te diriges hoy? 🗺️\n\nSelecciona una ruta y te mostraré las unidades disponibles.`;
+      return `${greeting}\n\n¿A dónde te diriges hoy? \n\nSelecciona una ruta y te mostraré las unidades disponibles.`;
     }
-    return `${greeting}\n\n📍 Ruta: "${ctx.routeName}"\n🚌 Unidades: ${ctx.operatorCount}\n\n¿Necesitas saber el costo o tiempo?`;
+    return `${greeting}\n\n Ruta: "${ctx.routeName}"\n Unidades: ${ctx.operatorCount}\n\n¿Necesitas saber el costo o tiempo?`;
   }
 }
 
 function respondHelp(ctx) {
   if (ctx.role === "driver") {
-    return `🚌 **Asistente para Operadores**\n\n` +
+    return ` **Asistente para Operadores**\n\n` +
       `Soy tu asistente virtual. Puedo ayudarte con:\n\n` +
-      `📊 **Información de servicio**\n` +
+      ` **Información de servicio**\n` +
       `• "¿Cuántos usuarios hay en mi ruta?"\n` +
       `• "¿Cuánto tiempo toma mi ruta?"\n\n` +
-      `🛠️ **Gestión de unidad**\n` +
+      ` **Gestión de unidad**\n` +
       `• "¿Cómo actualizo asientos?"\n` +
       `• "¿Cómo me activo?"\n\n` +
-      `🚦 **Rutas y tráfico**\n` +
+      ` **Rutas y tráfico**\n` +
       `• "Sugerencias para tráfico"\n` +
       `• "Tiempo de mi ruta"\n\n` +
-      `💬 Pregúntame lo que necesites sobre tu operación.`;
+      ` Pregúntame lo que necesites sobre tu operación.`;
   } else {
     return `👤 **Asistente de Transporte**\n\n` +
       `Soy tu asistente virtual. Puedo ayudarte con:\n\n` +
-      `💰 **Costos**\n` +
+      ` **Costos**\n` +
       `• "¿Cuánto cuesta ir a...?"\n` +
       `• "Precio de la ruta"\n\n` +
-      `⏱️ **Tiempos**\n` +
+      ` **Tiempos**\n` +
       `• "¿Cuánto tarda?"\n` +
       `• "Tiempo de viaje"\n\n` +
-      `🚌 **Unidades**\n` +
+      ` **Unidades**\n` +
       `• "¿Hay unidades disponibles?"\n` +
       `• "¿Qué ruta me lleva a...?"\n\n` +
-      `💬 Pregúntame lo que necesites sobre tu viaje.`;
+      ` Pregúntame lo que necesites sobre tu viaje.`;
   }
 }
 
 function respondDefault(ctx, query) {
   if (ctx.role === "driver") {
-    return `💬 No estoy seguro de entender tu pregunta.\n\n` +
-      `📊 **Tu estado actual:**\n` +
+    return ` No estoy seguro de entender tu pregunta.\n\n` +
+      ` **Tu estado actual:**\n` +
       `• Ruta: ${ctx.routeName || "Sin asignar"}\n` +
       `• Estado: ${ctx.driverStatus}\n` +
       `• Usuarios: ${ctx.userCount}\n\n` +
-      `💡 **Puedes preguntarme:**\n` +
+      ` **Puedes preguntarme:**\n` +
       `• "¿Cuántos usuarios hay?"\n` +
       `• "¿Cómo actualizo asientos?"\n` +
       `• "¿Cuánto tiempo toma la ruta?"\n\n` +
       `O escribe "ayuda" para ver todas las opciones.`;
   } else {
-    return `💬 No estoy seguro de entender tu pregunta.\n\n` +
-      `📊 **Tu estado actual:**\n` +
+    return ` No estoy seguro de entender tu pregunta.\n\n` +
+      ` **Tu estado actual:**\n` +
       `• Ruta: ${ctx.routeName || "Sin seleccionar"}\n` +
       `• Unidades: ${ctx.operatorCount}\n\n` +
-      `💡 **Puedes preguntarme:**\n` +
+      ` **Puedes preguntarme:**\n` +
       `• "¿Cuánto cuesta?"\n` +
       `• "¿Hay unidades disponibles?"\n` +
       `• "¿Qué ruta me lleva a...?"\n\n` +
